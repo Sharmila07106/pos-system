@@ -1,27 +1,15 @@
 {
   "name": "pos-system",
   "version": "1.0.0",
-  "description": "Point of Sale system for retail checkout (MERN stack)",
+  "description": "NovaPOS - MERN stack retail checkout",
   "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "seed": "npm run seed --prefix server",
+    "seed:products": "npm run seed:products --prefix server"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Sharmila07106/pos-system.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/Sharmila07106/pos-system/issues"
-  },
-  "homepage": "https://github.com/Sharmila07106/pos-system#readme",
   "dependencies": {
-    "concurrently": "^10.0.5"
+    "concurrently": "^8.0.1"
   }
 }
