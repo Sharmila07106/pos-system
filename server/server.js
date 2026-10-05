@@ -16,6 +16,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/sales', require('./routes/salesRoutes'));
+app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
