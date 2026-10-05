@@ -74,14 +74,35 @@ const POS = () => {
   const grandTotal = subtotal + tax - discount;
   const change = (Number(amountReceived) || 0) - grandTotal;
 
-  const handleCompleteSale = () => {
+  const handleCompleteSale = async () => {
     if (cart.length === 0) return toast.error('Cart is empty');
     if (paymentMethod === 'CASH' && (Number(amountReceived) < grandTotal)) {
       return toast.error('Insufficient amount received');
     }
-    toast.success('Sale Completed!');
-    setCart([]);
-    setAmountReceived('');
+
+    try {
+      const payload = {
+        items: cart.map(item => ({
+          _id: item._id,
+          qty: item.qty
+        })),
+        discount,
+        paymentMethod,
+        amountReceived: paymentMethod === 'CASH' ? Number(amountReceived) : grandTotal
+      };
+
+      const { data } = await api.post('/sales', payload);
+      
+      toast.success('Sale Completed Successfully!');
+      // Typically you would open receipt modal here with data.data (the sale object)
+      console.log('Sale Object:', data.data);
+      
+      setCart([]);
+      setAmountReceived('');
+    } catch (error) {
+      // Error is handled by api interceptor
+      console.error(error);
+    }
   };
 
   return (
