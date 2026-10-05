@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './context/ThemeContext';
+import Background from './components/ui/Background';
 import MainLayout from './layouts/MainLayout';
 import AuthLayout from './layouts/AuthLayout';
 import Login from './pages/Login';
@@ -17,6 +18,7 @@ import Home from './pages/Home';
 function App() {
   return (
     <ThemeProvider>
+      <Background />
       <Router>
         <Toaster 
           position="top-right" 

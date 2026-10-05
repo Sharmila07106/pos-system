@@ -42,10 +42,10 @@ const MainLayout = () => {
   ];
 
   return (
-    <div className="flex h-screen bg-bg-color text-text-color overflow-hidden transition-colors duration-300">
+    <div className="flex h-screen text-text-color transition-colors duration-300">
       
       {/* Sidebar */}
-      <aside className={`transition-all duration-300 ease-in-out border-r border-border-color bg-card-bg backdrop-blur-xl ${collapsed ? 'w-20' : 'w-64'} flex flex-col`}>
+      <aside className={`transition-all duration-300 ease-in-out border-r border-border-color bg-card-bg/80 backdrop-blur-xl ${collapsed ? 'w-20' : 'w-64'} flex flex-col z-20`}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-border-color">
           {!collapsed && (
             <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
@@ -86,12 +86,10 @@ const MainLayout = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full relative">
-        {/* Background Effects */}
-        <div className="absolute top-0 right-0 w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+      <main className="flex-1 flex flex-col h-full relative z-10 overflow-hidden">
         
         {/* Top Header */}
-        <header className="h-16 border-b border-border-color bg-bg-color/50 backdrop-blur-md flex items-center justify-between px-6 z-10">
+        <header className="h-16 border-b border-border-color bg-card-bg/50 backdrop-blur-md flex items-center justify-between px-6 z-20">
           <div className="flex items-center gap-4">
             {/* Can put breadcrumbs or search here */}
           </div>

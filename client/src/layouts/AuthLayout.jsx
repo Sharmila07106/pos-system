@@ -24,12 +24,8 @@ const AuthLayout = () => {
   }
 
   return (
-    <div className="min-h-screen bg-bg-color text-text-color overflow-hidden relative transition-colors duration-300">
+    <div className="min-h-screen text-text-color relative transition-colors duration-300">
       <ThemeToggle />
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-violet-600/20 blur-[120px]"></div>
-      </div>
       <Outlet />
     </div>
   );
