@@ -1,0 +1,27 @@
+{
+  "name": "pos-system",
+  "version": "1.0.0",
+  "description": "Point of Sale system for retail checkout (MERN stack)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sharmila07106/pos-system.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Sharmila07106/pos-system/issues"
+  },
+  "homepage": "https://github.com/Sharmila07106/pos-system#readme",
+  "dependencies": {
+    "concurrently": "^10.0.5"
+  }
+}
