@@ -15,6 +15,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Mount routes
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/sales', require('./routes/salesRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) => {
