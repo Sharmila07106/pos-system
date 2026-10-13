@@ -42,7 +42,9 @@ const createUser = async (req, res) => {
       });
     }
 
-    const allowedRole = role === 'ADMIN' ? 'ADMIN' : 'CASHIER';
+    const allowedRole = ['ADMIN', 'INVENTORY_MANAGER', 'CASHIER'].includes(role)
+      ? role
+      : 'CASHIER';
 
     const user = await User.create({
       name: name.trim(),
@@ -105,7 +107,7 @@ const updateUser = async (req, res) => {
     }
 
     if (name) user.name = name.trim();
-    if (role && ['ADMIN', 'CASHIER'].includes(role)) user.role = role;
+    if (role && ['ADMIN', 'INVENTORY_MANAGER', 'CASHIER'].includes(role)) user.role = role;
     if (status && ['Active', 'Disabled'].includes(status)) user.status = status;
     if (password) user.password = password; // pre-save hook will hash
 
