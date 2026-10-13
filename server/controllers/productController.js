@@ -1,48 +1,100 @@
 const Product = require('../models/Product');
 const asyncHandler = require('express-async-handler');
+const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
+const { products: seedProductsList } = require('../utils/seedProducts');
+
+// In-memory product storage fallback when MongoDB connection is inactive
+const memoryProducts = seedProductsList.map((p, idx) => ({
+  _id: `prod_${idx + 1}`,
+  name: p.name,
+  barcode: p.barcode,
+  category: p.category,
+  price: p.price,
+  stock: p.stock,
+  lowStockThreshold: p.lowStockThreshold || 5,
+  image: p.image || '',
+  isActive: p.isActive !== false,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+}));
 
 // @desc    Get all products
 // @route   GET /api/products
 // @access  Private
 const getProducts = asyncHandler(async (req, res) => {
   const { search, category, activeOnly, page = 1, limit = 50 } = req.query;
-  
-  let query = {};
-  
-  if (req.user && req.user.role === 'CASHIER') {
-    query.isActive = true;
-  } else if (activeOnly === 'true') {
-    query.isActive = true;
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      let query = {};
+      
+      if (req.user && req.user.role === 'CASHIER') {
+        query.isActive = true;
+      } else if (activeOnly === 'true') {
+        query.isActive = true;
+      }
+
+      if (search) {
+        query.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { barcode: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      if (category && category !== 'All') {
+        query.category = category;
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+      const total = await Product.countDocuments(query);
+      const products = await Product.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit));
+
+      return res.json({
+        success: true,
+        count: products.length,
+        total,
+        page: Number(page),
+        pages: Math.ceil(total / Number(limit)),
+        data: products
+      });
+    } catch (err) {
+      console.warn('MongoDB query fallback to memory products:', err.message);
+    }
   }
 
-  if (search) {
-    query.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { barcode: { $regex: search, $options: 'i' } }
-    ];
-  }
+  // Resilient memory products fallback
+  let list = memoryProducts.filter(p => {
+    if ((req.user && req.user.role === 'CASHIER') || activeOnly === 'true') {
+      if (!p.isActive) return false;
+    }
+    if (category && category !== 'All') {
+      if (p.category.toLowerCase() !== category.toLowerCase()) return false;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      const matchName = p.name.toLowerCase().includes(q);
+      const matchBarcode = p.barcode.toLowerCase().includes(q);
+      if (!matchName && !matchBarcode) return false;
+    }
+    return true;
+  });
 
-  if (category && category !== 'All') {
-    query.category = category;
-  }
-
+  const total = list.length;
   const skip = (Number(page) - 1) * Number(limit);
-  
-  const total = await Product.countDocuments(query);
-  const products = await Product.find(query)
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(Number(limit));
+  const paged = list.slice(skip, skip + Number(limit));
 
   res.json({
     success: true,
-    count: products.length,
+    count: paged.length,
     total,
     page: Number(page),
-    pages: Math.ceil(total / Number(limit)),
-    data: products
+    pages: Math.ceil(total / Number(limit)) || 1,
+    data: paged
   });
 });
 
@@ -50,7 +102,16 @@ const getProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/products/:id
 // @access  Private
 const getProductById = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id);
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const product = await Product.findById(req.params.id);
+      if (product) return res.json({ success: true, data: product });
+    } catch (err) {
+      console.warn('MongoDB getProductById fallback:', err.message);
+    }
+  }
+
+  const product = memoryProducts.find(p => p._id === req.params.id);
   if (!product) {
     res.status(404);
     throw new Error('Product not found');
@@ -62,7 +123,16 @@ const getProductById = asyncHandler(async (req, res) => {
 // @route   GET /api/products/barcode/:barcode
 // @access  Private
 const getProductByBarcode = asyncHandler(async (req, res) => {
-  const product = await Product.findOne({ barcode: req.params.barcode, isActive: true });
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const product = await Product.findOne({ barcode: req.params.barcode, isActive: true });
+      if (product) return res.json({ success: true, data: product });
+    } catch (err) {
+      console.warn('MongoDB getProductByBarcode fallback:', err.message);
+    }
+  }
+
+  const product = memoryProducts.find(p => p.barcode === req.params.barcode && p.isActive);
   if (!product) {
     res.status(404);
     throw new Error('Product not found or inactive');
@@ -74,7 +144,16 @@ const getProductByBarcode = asyncHandler(async (req, res) => {
 // @route   GET /api/products/categories/all
 // @access  Private
 const getCategories = asyncHandler(async (req, res) => {
-  const categories = await Product.distinct('category', { isActive: true });
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const categories = await Product.distinct('category', { isActive: true });
+      return res.json({ success: true, data: categories });
+    } catch (err) {
+      console.warn('MongoDB getCategories fallback:', err.message);
+    }
+  }
+
+  const categories = Array.from(new Set(memoryProducts.filter(p => p.isActive).map(p => p.category)));
   res.json({ success: true, data: categories });
 });
 
@@ -162,5 +241,6 @@ module.exports = {
   createProduct,
   updateProduct,
   deleteProduct,
-  uploadImage
+  uploadImage,
+  memoryProducts
 };
