@@ -201,7 +201,7 @@ const MainLayout = () => {
         </header>
 
         {/* Page Body Viewport */}
-        <div className="flex-1 overflow-auto p-6 md:p-8 max-w-[1440px] w-full mx-auto">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 max-w-[1600px] w-full mx-auto scroll-smooth">
           <Outlet />
         </div>
       </main>
