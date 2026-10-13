@@ -13,6 +13,8 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Mount routes
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/sales', require('./routes/salesRoutes'));
