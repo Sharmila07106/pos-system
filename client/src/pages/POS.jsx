@@ -1,102 +1,187 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Minus, Trash2, ShoppingBag, CreditCard, Banknote, QrCode, CheckCircle2, Printer } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  Search, 
+  Plus, 
+  Minus, 
+  Trash2, 
+  ShoppingBag, 
+  CreditCard, 
+  Banknote, 
+  QrCode, 
+  CheckCircle2, 
+  Printer, 
+  Barcode, 
+  RefreshCw, 
+  Tag, 
+  X,
+  Package,
+  Layers,
+  ArrowRight
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { motion, AnimatePresence, useSpring, useTransform, motionValue } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 import api from '../services/api';
-import GlassCard from '../components/ui/GlassCard';
-
-// Animated Number Component
-const AnimatedNumber = ({ value }) => {
-  const animatedValue = useSpring(value, { stiffness: 100, damping: 20 });
-  
-  useEffect(() => {
-    animatedValue.set(value);
-  }, [animatedValue, value]);
-
-  const display = useTransform(animatedValue, (current) => `₹${current.toFixed(2)}`);
-  
-  return <motion.span>{display}</motion.span>;
-};
 
 const POS = () => {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [amountReceived, setAmountReceived] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [saleCompleteData, setSaleCompleteData] = useState(null);
-  
+  const [imageErrorMap, setImageErrorMap] = useState({});
+
   const searchInputRef = useRef(null);
   const { width, height } = useWindowSize();
 
-  // Quick Products demo (Would be real API data in full production)
-  const quickProducts = [
-    { _id: '1', name: 'Organic Milk 1L', price: 65, category: 'Dairy' },
-    { _id: '2', name: 'Whole Wheat Bread', price: 40, category: 'Bakery' },
-    { _id: '3', name: 'Classic Chips', price: 20, category: 'Snacks' },
-    { _id: '4', name: 'Cola 2L', price: 90, category: 'Beverages' },
-    { _id: '5', name: 'Fresh Apples 1kg', price: 180, category: 'Fruits' },
-    { _id: '6', name: 'Dark Chocolate', price: 120, category: 'Snacks' },
-  ];
+  // Load products from API
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/products?activeOnly=true&limit=100');
+      if (res.data?.data) {
+        setProducts(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load products:', err);
+      toast.error('Could not load products catalogue');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  // Keyboard shortcut handler
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'F2') {
         e.preventDefault();
         searchInputRef.current?.focus();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        if (cart.length > 0) {
+          setCart([]);
+          toast('Cart cleared', { icon: '🗑️' });
+        }
+      } else if (e.key === 'Escape' && saleCompleteData) {
+        setSaleCompleteData(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [cart, saleCompleteData]);
 
+  // Handle image load error
+  const handleImageError = (productId) => {
+    setImageErrorMap(prev => ({ ...prev, [productId]: true }));
+  };
+
+  // Derive categories list with product counts
+  const categories = useMemo(() => {
+    const counts = { All: products.length };
+    products.forEach(p => {
+      const cat = p.category || 'General';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.keys(counts).map(name => ({ name, count: counts[name] }));
+  }, [products]);
+
+  // Filtered products list
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+      const q = search.trim().toLowerCase();
+      const matchesSearch = !q || 
+        p.name.toLowerCase().includes(q) || 
+        (p.barcode && p.barcode.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q));
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategory, search]);
+
+  // Handle barcode search on Enter
   const handleBarcodeSearch = async (e) => {
     if (e.key === 'Enter' && search.trim()) {
-      try {
-        const { data } = await api.get(`/products/barcode/${search}`);
-        addToCart(data.data);
+      const term = search.trim();
+      const localMatch = products.find(p => p.barcode === term || p.name.toLowerCase() === term.toLowerCase());
+      if (localMatch) {
+        addToCart(localMatch);
         setSearch('');
+        return;
+      }
+
+      try {
+        const { data } = await api.get(`/products/barcode/${term}`);
+        if (data?.data) {
+          addToCart(data.data);
+          setSearch('');
+          toast.success(`Added ${data.data.name}`);
+        }
       } catch (error) {
-        toast.error('Product not found or out of stock');
+        toast.error('Product not found for barcode: ' + term);
       }
     }
   };
 
+  // Add item to cart
   const addToCart = (product) => {
+    if (product.stock <= 0) {
+      toast.error(`${product.name} is out of stock!`);
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item._id === product._id);
       if (existing) {
+        if (existing.qty >= product.stock) {
+          toast.error(`Only ${product.stock} units available in stock!`);
+          return prev;
+        }
         return prev.map(item => item._id === product._id ? { ...item, qty: item.qty + 1 } : item);
       }
       return [{ ...product, qty: 1 }, ...prev];
     });
-    
-    // Tiny haptic bump if supported
-    if (navigator.vibrate) navigator.vibrate(50);
+
+    if (navigator.vibrate) navigator.vibrate(40);
   };
 
+  // Stepper update
   const updateQty = (id, delta) => {
+    const product = products.find(p => p._id === id);
     setCart(prev => prev.map(item => {
       if (item._id === id) {
         const newQty = item.qty + delta;
+        if (product && newQty > product.stock) {
+          toast.error(`Maximum stock reached (${product.stock})`);
+          return item;
+        }
         return newQty > 0 ? { ...item, qty: newQty } : item;
       }
       return item;
     }));
   };
 
+  // Remove single line
   const removeFromCart = (id) => {
     setCart(prev => prev.filter(item => item._id !== id));
   };
 
+  // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const tax = subtotal * 0.05; // 5% mock tax
+  const tax = subtotal * 0.05; // 5% GST / VAT
   const discount = 0;
-  const grandTotal = subtotal + tax - discount;
+  const grandTotal = Math.max(0, subtotal + tax - discount);
   const change = (Number(amountReceived) || 0) - grandTotal;
 
+  // Checkout submission
   const handleCompleteSale = async () => {
     if (cart.length === 0) return toast.error('Cart is empty');
     if (paymentMethod === 'CASH' && (Number(amountReceived) < grandTotal)) {
@@ -106,100 +191,59 @@ const POS = () => {
     setIsProcessing(true);
     try {
       const payload = {
-        items: cart.map(item => ({ _id: item._id, qty: item.qty, name: item.name, price: item.price })),
+        items: cart.map(item => ({ 
+          _id: item._id, 
+          qty: item.qty, 
+          name: item.name, 
+          price: item.price,
+          barcode: item.barcode 
+        })),
         discount,
         paymentMethod,
         amountReceived: paymentMethod === 'CASH' ? Number(amountReceived) : grandTotal
       };
 
       const { data } = await api.post('/sales', payload);
-      
-      // Success State
       setSaleCompleteData(data.data);
       setCart([]);
       setAmountReceived('');
+      fetchProducts(); // Refresh stock
+      toast.success('Sale completed successfully!');
     } catch (error) {
       console.error(error);
+      toast.error(error.response?.data?.message || 'Checkout failed');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Full Screen Success & Receipt Overlay
-  if (saleCompleteData) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4">
-        <Confetti width={width} height={height} recycle={false} numberOfPieces={500} colors={['#00e5ff', '#8b5cf6', '#f97316']} />
-        
-        <motion.div 
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="mb-8 flex flex-col items-center"
-        >
-          <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.5)] mb-4">
-            <CheckCircle2 size={48} className="text-white" />
-          </div>
-          <h2 className="text-3xl font-bold text-white">Payment Successful!</h2>
-          <p className="text-slate-300">Change Due: <span className="font-bold text-orange-400 text-xl">₹{saleCompleteData.changeGiven?.toFixed(2)}</span></p>
-        </motion.div>
+  // Quick denomination chip handler
+  const setCashQuickAmount = (val) => {
+    if (val === 'EXACT') {
+      setAmountReceived(String(Math.ceil(grandTotal)));
+    } else {
+      const current = Number(amountReceived) || 0;
+      setAmountReceived(String(current + val));
+    }
+  };
 
-        <motion.div 
-          initial={{ y: 1000 }}
-          animate={{ y: 0 }}
-          transition={{ type: 'spring', damping: 20, delay: 0.2 }}
-          className="bg-white text-slate-900 w-full max-w-sm rounded-t-xl p-6 shadow-2xl relative"
-        >
-          {/* Paper jagged top edge effect could go here */}
-          <div className="text-center mb-6 border-b border-slate-200 pb-4">
-            <h3 className="font-bold text-2xl tracking-tighter">NovaPOS</h3>
-            <p className="text-xs text-slate-500">Scan. Pay. Grow.</p>
-            <p className="text-xs text-slate-500 mt-2">Txn: {saleCompleteData.transactionId}</p>
-          </div>
-          
-          <div className="space-y-3 mb-6 max-h-48 overflow-y-auto">
-            {saleCompleteData.items.map(item => (
-              <div key={item._id} className="flex justify-between text-sm">
-                <span>{item.quantity}x {item.name}</span>
-                <span className="font-medium">₹{item.total.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-          
-          <div className="border-t border-slate-200 pt-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Subtotal</span>
-              <span>₹{saleCompleteData.subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Tax</span>
-              <span>₹{saleCompleteData.tax.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg mt-2">
-              <span>Total</span>
-              <span>₹{saleCompleteData.total.toFixed(2)}</span>
-            </div>
-          </div>
-          
-          <div className="mt-8 flex gap-3">
-             <button onClick={() => setSaleCompleteData(null)} className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-colors">
-               New Sale
-             </button>
-             <button className="flex-1 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
-               <Printer size={18} /> Print
-             </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
+  // Print receipt function
+  const handlePrintReceipt = () => {
+    window.print();
+  };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col lg:flex-row gap-6 relative z-10">
-      {/* LEFT: Products Area */}
-      <div className="flex-1 flex flex-col gap-6">
-        <GlassCard className="p-2 flex items-center shadow-lg relative group focus-within:ring-2 ring-cyan-500/50 transition-all">
-          <div className="absolute left-6 text-slate-400 group-focus-within:text-cyan-400 transition-colors">
-            <Search size={22} />
+    <div className="w-full flex flex-col xl:flex-row gap-6 items-start relative z-10 pb-16">
+      
+      {/* ========================================================== */}
+      {/* LEFT COLUMN: Search, Category Chips & Products Grid        */}
+      {/* ========================================================== */}
+      <div className="flex-1 min-w-0 w-full flex flex-col gap-6">
+        
+        {/* Top Scan Bar */}
+        <div className="bg-white border border-[#E3E8F0] rounded-[18px] p-3 shadow-sm flex items-center gap-3 transition-all focus-within:border-[#0FA38F] focus-within:ring-2 focus-within:ring-[#0FA38F]/20">
+          <div className="pl-2 text-[#8B96AB]">
+            <Search size={22} strokeWidth={1.75} />
           </div>
           <input
             ref={searchInputRef}
@@ -207,92 +251,283 @@ const POS = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleBarcodeSearch}
-            placeholder="Scan barcode or search product... [F2]"
-            className="w-full bg-transparent pl-14 pr-4 py-4 text-lg text-text-color placeholder-slate-500 outline-none font-medium"
+            placeholder="Scan barcode or search product name / category... [F2]"
+            className="w-full bg-transparent text-base md:text-lg text-[#0B1B3A] placeholder-[#8B96AB] outline-none font-medium"
             autoFocus
           />
-        </GlassCard>
-
-        <GlassCard className="flex-1 p-6 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex items-center gap-3 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-            {['All', 'Snacks', 'Beverages', 'Dairy', 'Fruits'].map(cat => (
-              <button key={cat} className={`px-5 py-2 rounded-xl whitespace-nowrap text-sm font-bold transition-all ${cat === 'All' ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-black/5 dark:bg-white/5 text-slate-500 hover:text-text-color border border-border-color hover:bg-black/10 dark:hover:bg-white/10'}`}>
-                {cat}
-              </button>
-            ))}
+          {search && (
+            <button 
+              onClick={() => setSearch('')}
+              className="p-1 rounded-lg hover:bg-[#EEF2F8] text-[#8B96AB] hover:text-[#0B1B3A] transition-colors"
+            >
+              <X size={18} />
+            </button>
+          )}
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-[#EEF2F8] text-[#53607A] text-xs font-bold rounded-lg border border-[#E3E8F0]">
+            <Barcode size={14} className="text-[#0FA38F]" />
+            <span>F2 Scan</span>
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 overflow-y-auto pb-4 pr-2">
-            {quickProducts.map((p, i) => (
-              <motion.div 
-                key={p._id} 
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.05 }}
-                whileHover={{ y: -5, scale: 1.02 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => addToCart(p)}
-                className="bg-card-bg border border-border-color rounded-2xl p-4 cursor-pointer shadow-sm hover:shadow-[0_8px_30px_rgba(0,229,255,0.15)] hover:border-cyan-500/30 transition-all group backdrop-blur-sm"
+        {/* Category Filters Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat.name;
+            return (
+              <button
+                key={cat.name}
+                onClick={() => setSelectedCategory(cat.name)}
+                className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 border ${
+                  isActive
+                    ? 'bg-[#0FA38F] text-white border-[#0FA38F] shadow-[0_2px_8px_rgba(15,163,143,0.3)]'
+                    : 'bg-white text-[#53607A] border-[#E3E8F0] hover:bg-[#EEF2F8] hover:text-[#0B1B3A]'
+                }`}
               >
-                <div className="aspect-square bg-black/5 dark:bg-white/5 rounded-xl mb-4 flex items-center justify-center relative overflow-hidden group-hover:bg-black/10 dark:group-hover:bg-white/10 transition-colors">
-                  <ShoppingBag size={32} className="text-slate-400 group-hover:text-cyan-500 transition-colors" />
-                </div>
-                <h3 className="font-bold text-text-color text-sm truncate">{p.name}</h3>
-                <div className="mt-1 font-black text-cyan-500">₹{p.price.toFixed(2)}</div>
-              </motion.div>
+                <span>{cat.name}</span>
+                <span className={`text-[11px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-[#EEF2F8] text-[#8B96AB]'
+                }`}>
+                  {cat.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Product Catalog Cards Grid */}
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+              <div key={n} className="bg-white border border-[#E3E8F0] rounded-[18px] p-4 animate-pulse flex flex-col gap-3">
+                <div className="aspect-square bg-[#EEF2F8] rounded-xl w-full"></div>
+                <div className="h-4 bg-[#EEF2F8] rounded w-3/4"></div>
+                <div className="h-4 bg-[#EEF2F8] rounded w-1/2"></div>
+              </div>
             ))}
           </div>
-        </GlassCard>
+        ) : filteredProducts.length === 0 ? (
+          <div className="bg-white border border-[#E3E8F0] rounded-[18px] p-12 text-center flex flex-col items-center justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-[#EEF2F8] text-[#8B96AB] flex items-center justify-center mb-4">
+              <Package size={32} strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-bold text-[#0B1B3A] mb-1">No products found</h3>
+            <p className="text-sm text-[#8B96AB] max-w-sm mb-4">
+              No matching products in category "{selectedCategory}" or search term "{search}".
+            </p>
+            <button
+              onClick={() => { setSelectedCategory('All'); setSearch(''); }}
+              className="px-4 py-2 rounded-xl bg-[#0FA38F] text-white text-xs font-bold hover:bg-[#0B8A78] transition-colors"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
+            {filteredProducts.map((p) => {
+              const isOutOfStock = p.stock <= 0;
+              const isLowStock = !isOutOfStock && p.stock <= (p.lowStockThreshold || 5);
+              const hasImage = p.image && !imageErrorMap[p._id];
+
+              return (
+                <motion.div
+                  key={p._id}
+                  whileHover={{ y: -3 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => !isOutOfStock && addToCart(p)}
+                  className={`bg-white border rounded-[18px] p-4 flex flex-col justify-between transition-all select-none shadow-[0_1px_2px_rgba(11,27,58,0.04)] ${
+                    isOutOfStock 
+                      ? 'opacity-60 cursor-not-allowed border-[#E3E8F0]' 
+                      : 'cursor-pointer border-[#E3E8F0] hover:border-[#0FA38F]/40 hover:shadow-[0_8px_24px_rgba(11,27,58,0.08)] group'
+                  }`}
+                >
+                  {/* Image container with accurate product photo */}
+                  <div className="aspect-square bg-[#F4F7FB] rounded-xl mb-3 flex items-center justify-center relative overflow-hidden p-2 border border-[#EEF2F8]">
+                    {hasImage ? (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        loading="lazy"
+                        onError={() => handleImageError(p._id)}
+                        className="w-full h-full object-contain rounded-lg transition-transform duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-center p-2">
+                        <span className="w-12 h-12 rounded-xl bg-[#E2F6F3] text-[#0FA38F] flex items-center justify-center font-extrabold text-lg mb-1">
+                          {p.name.charAt(0)}
+                        </span>
+                        <span className="text-[10px] font-bold text-[#8B96AB] uppercase tracking-wider">{p.category}</span>
+                      </div>
+                    )}
+
+                    {/* Stock Status Pill */}
+                    <div className="absolute top-2 right-2">
+                      {isOutOfStock ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEE2E2] text-[#E5484D] border border-[#FCA5A5]/40 shadow-xs">
+                          Out
+                        </span>
+                      ) : isLowStock ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FFF1E3] text-[#FF8A1F] border border-[#FF8A1F]/30 shadow-xs">
+                          Low ({p.stock})
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#DCFCE7] text-[#16A34A] border border-[#86EFAC]/40 shadow-xs">
+                          {p.stock}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Product Details */}
+                  <div className="flex-1 min-w-0 mb-3">
+                    <span className="text-[11px] font-bold text-[#8B96AB] uppercase tracking-wider block mb-0.5">
+                      {p.category}
+                    </span>
+                    <h3 className="font-bold text-[#0B1B3A] text-sm truncate leading-snug" title={p.name}>
+                      {p.name}
+                    </h3>
+                  </div>
+
+                  {/* Price & Add to Cart Action */}
+                  <div className="flex items-center justify-between pt-2 border-t border-[#EEF2F8]">
+                    <div className="text-[#0FA38F] font-extrabold text-base md:text-lg tabular-nums">
+                      ₹{p.price.toFixed(2)}
+                    </div>
+                    
+                    <button
+                      type="button"
+                      disabled={isOutOfStock}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isOutOfStock) addToCart(p);
+                      }}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                        isOutOfStock
+                          ? 'bg-[#EEF2F8] text-[#8B96AB] cursor-not-allowed'
+                          : 'bg-[#E2F6F3] text-[#0FA38F] hover:bg-[#0FA38F] hover:text-white shadow-xs group-hover:scale-105 active:scale-95'
+                      }`}
+                      title={isOutOfStock ? 'Out of stock' : 'Add to cart'}
+                    >
+                      <Plus size={18} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* RIGHT: Cart & Billing */}
-      <GlassCard className="w-full lg:w-[420px] flex flex-col shadow-2xl overflow-hidden min-h-0">
+      {/* ========================================================== */}
+      {/* RIGHT COLUMN: Current Order, Cart & Billing Summary        */}
+      {/* ========================================================== */}
+      <div className="w-full xl:w-[420px] 2xl:w-[460px] flex-shrink-0 xl:sticky xl:top-4 bg-white border border-[#E3E8F0] rounded-[18px] shadow-[0_1px_2px_rgba(11,27,58,0.06),0_8px_24px_rgba(11,27,58,0.08)] flex flex-col">
         
         {/* Cart Header */}
-        <div className="p-5 border-b border-border-color bg-black/5 dark:bg-black/20 flex items-center justify-between">
-          <h2 className="font-bold text-xl flex items-center gap-2">
-            Current Order
-            <span className="px-2 py-1 bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 text-xs rounded-md">{cart.length}</span>
-          </h2>
+        <div className="p-5 border-b border-[#E3E8F0] flex items-center justify-between bg-[#F4F7FB]/50 rounded-t-[18px]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-[#E2F6F3] text-[#0FA38F] flex items-center justify-center">
+              <ShoppingBag size={18} strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="font-extrabold text-[#0B1B3A] text-base leading-tight">Current Order</h2>
+              <p className="text-[11px] font-semibold text-[#8B96AB]">
+                {cart.reduce((sum, item) => sum + item.qty, 0)} item{cart.reduce((sum, item) => sum + item.qty, 0) === 1 ? '' : 's'}
+              </p>
+            </div>
+          </div>
+          
           {cart.length > 0 && (
-            <button onClick={() => setCart([])} className="text-sm text-red-500 font-medium hover:text-red-400 transition-colors">Clear</button>
+            <button
+              onClick={() => setCart([])}
+              className="text-xs font-bold text-[#E5484D] hover:text-[#DC2626] hover:bg-[#FEE2E2]/60 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+              title="Clear Cart [F8]"
+            >
+              <Trash2 size={13} />
+              <span>Clear (F8)</span>
+            </button>
           )}
         </div>
-        
-        {/* Cart Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <AnimatePresence mode="popLayout">
+
+        {/* Cart Items List (Clean internal scroll, never locks outer page) */}
+        <div className="max-h-[300px] overflow-y-auto p-4 space-y-2.5 divide-y divide-[#EEF2F8]/60">
+          <AnimatePresence initial={false}>
             {cart.length === 0 ? (
-              <motion.div 
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4"
-              >
-                <ShoppingBag size={48} className="opacity-20" />
-                <p className="font-medium">Cart is empty</p>
-              </motion.div>
+              <div className="py-12 flex flex-col items-center justify-center text-center text-[#8B96AB]">
+                <div className="w-14 h-14 rounded-2xl bg-[#F4F7FB] flex items-center justify-center mb-3 text-[#CBD5E1]">
+                  <ShoppingBag size={28} strokeWidth={1.5} />
+                </div>
+                <p className="font-bold text-[#53607A] text-sm">Cart is empty</p>
+                <p className="text-xs text-[#8B96AB] mt-1 max-w-[220px]">
+                  Scan a barcode or click any product to begin billing
+                </p>
+              </div>
             ) : (
               cart.map(item => (
-                <motion.div 
-                  layout
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  key={item._id} 
-                  className="flex items-center gap-3 bg-black/5 dark:bg-white/5 p-3 rounded-xl border border-border-color"
+                <motion.div
+                  key={item._id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="pt-2.5 first:pt-0 flex items-center gap-3"
                 >
+                  {/* Thumbnail / Initial */}
+                  <div className="w-11 h-11 rounded-xl bg-[#F4F7FB] border border-[#E3E8F0] flex items-center justify-center overflow-hidden flex-shrink-0 p-1">
+                    {item.image && !imageErrorMap[item._id] ? (
+                      <img 
+                        src={item.image} 
+                        alt={item.name} 
+                        className="w-full h-full object-contain"
+                        onError={() => handleImageError(item._id)}
+                      />
+                    ) : (
+                      <span className="font-extrabold text-[#0FA38F] text-xs">
+                        {item.name.charAt(0)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Name and price */}
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm truncate">{item.name}</div>
-                    <div className="text-cyan-500 font-bold text-xs mt-0.5">₹{item.price}</div>
+                    <h4 className="font-bold text-[#0B1B3A] text-xs sm:text-sm truncate leading-snug">
+                      {item.name}
+                    </h4>
+                    <span className="text-[11px] font-semibold text-[#8B96AB]">
+                      ₹{item.price.toFixed(2)} each
+                    </span>
                   </div>
-                  
-                  <div className="flex items-center gap-1 bg-bg-color rounded-lg border border-border-color p-0.5">
-                    <button onClick={() => updateQty(item._id, -1)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-text-color hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-colors"><Minus size={14} /></button>
-                    <motion.span key={item.qty} initial={{ scale: 1.5, color: '#00e5ff' }} animate={{ scale: 1, color: 'var(--text-color)' }} className="w-6 text-center font-bold text-sm">{item.qty}</motion.span>
-                    <button onClick={() => updateQty(item._id, 1)} className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-text-color hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-colors"><Plus size={14} /></button>
+
+                  {/* Stepper Buttons */}
+                  <div className="flex items-center bg-[#F4F7FB] rounded-lg border border-[#E3E8F0] p-0.5">
+                    <button
+                      onClick={() => updateQty(item._id, -1)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-[#53607A] hover:bg-white hover:text-[#0B1B3A] transition-colors"
+                    >
+                      <Minus size={12} strokeWidth={2.5} />
+                    </button>
+                    <span className="w-6 text-center text-xs font-bold text-[#0B1B3A] tabular-nums">
+                      {item.qty}
+                    </span>
+                    <button
+                      onClick={() => updateQty(item._id, 1)}
+                      className="w-6 h-6 flex items-center justify-center rounded text-[#53607A] hover:bg-white hover:text-[#0B1B3A] transition-colors"
+                    >
+                      <Plus size={12} strokeWidth={2.5} />
+                    </button>
                   </div>
-                  
-                  <button onClick={() => removeFromCart(item._id)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors bg-black/5 dark:bg-white/5 hover:bg-red-500/10 rounded-lg ml-1">
-                    <Trash2 size={16} />
+
+                  {/* Line Total */}
+                  <div className="text-right min-w-[64px]">
+                    <div className="font-extrabold text-xs sm:text-sm text-[#0B1B3A] tabular-nums">
+                      ₹{(item.price * item.qty).toFixed(2)}
+                    </div>
+                  </div>
+
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => removeFromCart(item._id)}
+                    className="p-1 rounded-lg text-[#8B96AB] hover:text-[#E5484D] hover:bg-[#FEE2E2]/40 transition-colors ml-0.5"
+                  >
+                    <Trash2 size={14} />
                   </button>
                 </motion.div>
               ))
@@ -300,96 +535,219 @@ const POS = () => {
           </AnimatePresence>
         </div>
 
-        {/* Billing & Payment */}
-        <div className="bg-black/5 dark:bg-black/30 border-t border-border-color">
-          {/* Totals */}
-          <div className="p-5 space-y-2 border-b border-border-color">
-             <div className="flex justify-between text-sm text-slate-500 font-medium">
-               <span>Subtotal</span>
-               <span>₹{subtotal.toFixed(2)}</span>
-             </div>
-             <div className="flex justify-between text-sm text-slate-500 font-medium">
-               <span>Tax (5%)</span>
-               <span>₹{tax.toFixed(2)}</span>
-             </div>
-             <div className="pt-3 flex justify-between items-end">
-               <span className="text-lg font-bold text-slate-600 dark:text-slate-300">Total</span>
-               <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-blue-500">
-                 <AnimatedNumber value={grandTotal} />
-               </span>
-             </div>
+        {/* Billing Calculations & Payment Controls */}
+        <div className="border-t border-[#E3E8F0] bg-[#F4F7FB]/40 p-5 rounded-b-[18px] space-y-4">
+          
+          {/* Subtotal, Tax, and Grand Total */}
+          <div className="space-y-1.5 text-xs font-medium">
+            <div className="flex justify-between text-[#53607A]">
+              <span>Subtotal</span>
+              <span className="tabular-nums font-bold">₹{subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-[#53607A]">
+              <span>Tax (5% GST)</span>
+              <span className="tabular-nums font-bold">₹{tax.toFixed(2)}</span>
+            </div>
+            <div className="pt-2 border-t border-[#E3E8F0] flex justify-between items-baseline">
+              <span className="text-sm font-extrabold text-[#0B1B3A]">Total Amount</span>
+              <span className="text-2xl font-black text-[#0FA38F] tabular-nums">
+                ₹{grandTotal.toFixed(2)}
+              </span>
+            </div>
           </div>
 
-          {/* Payment Methods */}
-          <div className="p-5">
-             <div className="grid grid-cols-3 gap-3 mb-5">
-                {[
-                  { id: 'CASH', icon: Banknote, label: 'Cash' },
-                  { id: 'CARD', icon: CreditCard, label: 'Card' },
-                  { id: 'UPI', icon: QrCode, label: 'UPI' }
-                ].map(method => (
+          {/* Payment Method Selector Tiles */}
+          <div>
+            <label className="text-[11px] font-bold text-[#8B96AB] uppercase tracking-wider block mb-2">
+              Payment Method
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { id: 'CASH', label: 'Cash', icon: Banknote },
+                { id: 'CARD', label: 'Card', icon: CreditCard },
+                { id: 'UPI', label: 'UPI QR', icon: QrCode },
+              ].map(method => {
+                const Icon = method.icon;
+                const isSelected = paymentMethod === method.id;
+                return (
                   <button
                     key={method.id}
+                    type="button"
                     onClick={() => setPaymentMethod(method.id)}
-                    className={`py-3 rounded-xl flex flex-col items-center gap-2 border transition-all font-bold ${
-                      paymentMethod === method.id 
-                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-[0_0_15px_rgba(0,229,255,0.2)] scale-[1.02]' 
-                      : 'bg-bg-color border-border-color text-slate-500 hover:border-slate-400'
+                    className={`py-2.5 px-2 rounded-xl flex flex-col items-center gap-1 border font-bold text-xs transition-all ${
+                      isSelected
+                        ? 'bg-[#E2F6F3] border-[#0FA38F] text-[#0FA38F] shadow-[0_2px_8px_rgba(15,163,143,0.2)]'
+                        : 'bg-white border-[#E3E8F0] text-[#53607A] hover:bg-[#EEF2F8] hover:text-[#0B1B3A]'
                     }`}
                   >
-                    <method.icon size={20} />
-                    <span className="text-xs">{method.label}</span>
+                    <Icon size={18} strokeWidth={1.75} />
+                    <span>{method.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cash Tender Input & Quick Chips */}
+          {paymentMethod === 'CASH' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="space-y-3 pt-1"
+            >
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-[11px] font-bold text-[#8B96AB] uppercase tracking-wider">
+                    Amount Received
+                  </label>
+                  <span className="text-[11px] font-bold text-[#53607A]">
+                    Due: ₹{grandTotal.toFixed(2)}
+                  </span>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-[#0FA38F] text-base">₹</span>
+                  <input
+                    type="number"
+                    value={amountReceived}
+                    onChange={(e) => setAmountReceived(e.target.value)}
+                    placeholder={String(Math.ceil(grandTotal))}
+                    className="w-full bg-white border border-[#E3E8F0] rounded-xl pl-8 pr-3 py-2.5 text-base font-extrabold text-[#0B1B3A] outline-none focus:border-[#0FA38F] focus:ring-2 focus:ring-[#0FA38F]/20 transition-all tabular-nums"
+                  />
+                </div>
+              </div>
+
+              {/* Quick Denomination Chips */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setCashQuickAmount('EXACT')}
+                  className="px-2.5 py-1 rounded-lg bg-white border border-[#E3E8F0] text-[11px] font-bold text-[#53607A] hover:border-[#0FA38F] hover:text-[#0FA38F] transition-colors"
+                >
+                  Exact (₹{Math.ceil(grandTotal)})
+                </button>
+                {[100, 500, 2000].map(val => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setCashQuickAmount(val)}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-[#E3E8F0] text-[11px] font-bold text-[#53607A] hover:border-[#0FA38F] hover:text-[#0FA38F] transition-colors"
+                  >
+                    +₹{val}
                   </button>
                 ))}
-             </div>
+              </div>
 
-             <AnimatePresence mode="wait">
-               {paymentMethod === 'CASH' && (
-                 <motion.div 
-                   initial={{ opacity: 0, height: 0 }}
-                   animate={{ opacity: 1, height: 'auto' }}
-                   exit={{ opacity: 0, height: 0 }}
-                   className="space-y-4 mb-5 overflow-hidden"
-                 >
-                   <div>
-                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Amount Received</label>
-                     <div className="relative group">
-                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-500 font-black text-lg">₹</span>
-                       <input
-                         type="number"
-                         value={amountReceived}
-                         onChange={(e) => setAmountReceived(e.target.value)}
-                         className="w-full bg-bg-color border border-border-color rounded-xl pl-9 pr-4 py-3 text-xl font-black text-text-color outline-none focus:border-cyan-500 focus:ring-2 ring-cyan-500/20 transition-all"
-                       />
-                     </div>
-                   </div>
-                   <div className="flex justify-between items-center bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3">
-                     <span className="text-sm font-bold text-orange-600 dark:text-orange-400">Change Due</span>
-                     <span className="text-xl font-black text-orange-600 dark:text-orange-400">
-                       <AnimatedNumber value={Math.max(0, change)} />
-                     </span>
-                   </div>
-                 </motion.div>
-               )}
-             </AnimatePresence>
+              {/* Live Change Due Display */}
+              <div className="flex justify-between items-center bg-[#FFF1E3] border border-[#FF8A1F]/30 rounded-xl px-3.5 py-2.5">
+                <span className="text-xs font-bold text-[#B45309]">Change Due</span>
+                <span className="text-lg font-black text-[#D97706] tabular-nums">
+                  ₹{Math.max(0, change).toFixed(2)}
+                </span>
+              </div>
+            </motion.div>
+          )}
 
-             <motion.button
-               whileTap={cart.length > 0 ? { scale: 0.97 } : {}}
-               onClick={handleCompleteSale}
-               disabled={cart.length === 0 || isProcessing}
-               className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-black text-lg shadow-lg shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center justify-center gap-3 relative overflow-hidden"
-             >
-               {isProcessing ? (
-                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-               ) : (
-                 <>
-                   Checkout <AnimatedNumber value={grandTotal} />
-                 </>
-               )}
-             </motion.button>
-          </div>
+          {/* Complete Sale Action Button */}
+          <button
+            type="button"
+            onClick={handleCompleteSale}
+            disabled={cart.length === 0 || isProcessing || (paymentMethod === 'CASH' && Number(amountReceived) < grandTotal)}
+            className="w-full py-3.5 px-4 rounded-xl bg-[#0FA38F] hover:bg-[#0B8A78] text-white font-extrabold text-sm md:text-base shadow-[0_4px_14px_rgba(15,163,143,0.35)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isProcessing ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <span>Complete Sale</span>
+                <span className="tabular-nums">• ₹{grandTotal.toFixed(2)}</span>
+                <ArrowRight size={16} strokeWidth={2.5} />
+              </>
+            )}
+          </button>
         </div>
-      </GlassCard>
+      </div>
+
+      {/* ========================================================== */}
+      {/* SUCCESS RECEIPT MODAL                                      */}
+      {/* ========================================================== */}
+      {saleCompleteData && (
+        <div className="fixed inset-0 z-50 bg-[#0B1B3A]/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 overflow-y-auto">
+          <Confetti width={width} height={height} recycle={false} numberOfPieces={350} />
+          
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-[#0B1B3A] my-auto relative print:shadow-none"
+          >
+            {/* Header */}
+            <div className="text-center pb-4 border-b border-[#E3E8F0]">
+              <div className="w-12 h-12 bg-[#DCFCE7] text-[#16A34A] rounded-full flex items-center justify-center mx-auto mb-2">
+                <CheckCircle2 size={28} />
+              </div>
+              <h2 className="text-xl font-extrabold text-[#0B1B3A]">FreshMart Supermarket</h2>
+              <p className="text-xs text-[#8B96AB] mt-0.5">StoreFlow POS • Scan. Bill. Grow.</p>
+              <div className="mt-2 text-xs font-semibold text-[#53607A] bg-[#F4F7FB] py-1 px-2 rounded-md inline-block">
+                Txn: {saleCompleteData.transactionId}
+              </div>
+            </div>
+
+            {/* Receipt Items */}
+            <div className="py-4 space-y-2 max-h-48 overflow-y-auto text-xs border-b border-[#E3E8F0]">
+              {saleCompleteData.items?.map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center">
+                  <span className="font-semibold text-[#0B1B3A] truncate max-w-[180px]">
+                    {item.quantity}x {item.name}
+                  </span>
+                  <span className="font-bold tabular-nums">
+                    ₹{(item.total || item.price * item.quantity).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Totals */}
+            <div className="py-3 space-y-1.5 text-xs border-b border-[#E3E8F0]">
+              <div className="flex justify-between text-[#53607A]">
+                <span>Subtotal</span>
+                <span className="tabular-nums font-semibold">₹{saleCompleteData.subtotal?.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[#53607A]">
+                <span>Tax</span>
+                <span className="tabular-nums font-semibold">₹{saleCompleteData.tax?.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-base font-extrabold text-[#0B1B3A] pt-1">
+                <span>Total Paid</span>
+                <span className="text-[#0FA38F] tabular-nums">₹{saleCompleteData.total?.toFixed(2)}</span>
+              </div>
+              {saleCompleteData.changeGiven > 0 && (
+                <div className="flex justify-between text-xs text-[#D97706] font-bold pt-1">
+                  <span>Change Given</span>
+                  <span className="tabular-nums">₹{saleCompleteData.changeGiven?.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="mt-5 flex gap-2.5 print:hidden">
+              <button
+                onClick={() => setSaleCompleteData(null)}
+                className="flex-1 py-2.5 rounded-xl border border-[#E3E8F0] font-bold text-xs text-[#53607A] hover:bg-[#F4F7FB] transition-colors"
+              >
+                New Sale
+              </button>
+              <button
+                onClick={handlePrintReceipt}
+                className="flex-1 py-2.5 rounded-xl bg-[#0B1B3A] hover:bg-[#12274F] text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Printer size={15} />
+                <span>Print Receipt</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
     </div>
   );
 };
