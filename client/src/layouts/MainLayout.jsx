@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { StoreFlowLogo, StoreFlowIcon } from '../components/brand/StoreFlowLogo';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const MainLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -23,9 +24,10 @@ const MainLayout = () => {
   const [storeName, setStoreName] = useState('Central Supermarket');
   const location = useLocation();
   const navigate = useNavigate();
+  const { user: authUser, logout } = useAuth();
 
-  // Retrieve user or fallback to standard demo user
-  const user = JSON.parse(localStorage.getItem('user') || 'null') || {
+  // Retrieve user or fallback to auth user or safe placeholder
+  const user = authUser || JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user') || 'null') || {
     name: 'Admin User',
     role: 'ADMIN',
     email: 'admin@storeflow.com'
@@ -43,8 +45,7 @@ const MainLayout = () => {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    logout();
     navigate('/login');
   };
 
