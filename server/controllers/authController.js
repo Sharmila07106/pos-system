@@ -1,4 +1,6 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 
 // Helper to generate JWT token
@@ -10,6 +12,64 @@ const generateToken = (id) => {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     }
   );
+};
+
+// In-memory user store when MongoDB connection is not active
+const memoryUsers = [];
+
+// Helper to query user by email across MongoDB or memory fallback
+const findUserByEmail = async (email) => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      return await User.findOne({ email });
+    } catch (err) {
+      console.warn('MongoDB query fallback:', err.message);
+    }
+  }
+  return memoryUsers.find((u) => u.email === email) || null;
+};
+
+// Helper to count total registered users
+const countUsers = async () => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      return await User.countDocuments();
+    } catch (err) {
+      console.warn('MongoDB count fallback:', err.message);
+    }
+  }
+  return memoryUsers.length;
+};
+
+// Helper to create user across MongoDB or memory fallback
+const saveUser = async ({ name, email, password, role }) => {
+  if (mongoose.connection.readyState === 1) {
+    return await User.create({
+      name,
+      email,
+      password,
+      role,
+      status: 'Active',
+    });
+  }
+
+  // Fallback in-memory user with hashed password
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(password, salt);
+  const newUser = {
+    _id: new mongoose.Types.ObjectId().toString(),
+    name,
+    email,
+    password: hashedPassword,
+    role,
+    status: 'Active',
+    createdAt: new Date(),
+    matchPassword: async function (enteredPassword) {
+      return await bcrypt.compare(enteredPassword, this.password);
+    },
+  };
+  memoryUsers.push(newUser);
+  return newUser;
 };
 
 // @desc    Register new user
@@ -76,7 +136,7 @@ const registerUser = async (req, res) => {
     }
 
     // 4. Check for duplicate email (return 409)
-    const existingUser = await User.findOne({ email: cleanEmail });
+    const existingUser = await findUserByEmail(cleanEmail);
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -85,17 +145,15 @@ const registerUser = async (req, res) => {
     }
 
     // 5. Determine Role: first user in DB is ADMIN, subsequent public users are CASHIER
-    // Ignore any role sent by client
-    const userCount = await User.countDocuments();
+    const userCount = await countUsers();
     const assignedRole = userCount === 0 ? 'ADMIN' : 'CASHIER';
 
-    // 6. Create User
-    const user = await User.create({
+    // 6. Create User (hashes password via bcrypt)
+    const user = await saveUser({
       name: trimmedName,
       email: cleanEmail,
       password,
       role: assignedRole,
-      status: 'Active',
     });
 
     const token = generateToken(user._id);
@@ -114,7 +172,8 @@ const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Registration error details:', error.message || error);
+
     // Handle MongoDB duplicate key error code 11000 gracefully as 409
     if (error.code === 11000) {
       return res.status(409).json({
@@ -122,9 +181,19 @@ const registerUser = async (req, res) => {
         message: 'An account with this email already exists',
       });
     }
+
+    // Handle Mongoose validation errors as 400
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', '),
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message: 'Server error during registration',
+      message: error.message || 'Server error during registration',
     });
   }
 };
@@ -146,7 +215,7 @@ const loginUser = async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
 
     // Find user by email
-    const user = await User.findOne({ email: cleanEmail });
+    const user = await findUserByEmail(cleanEmail);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -161,7 +230,7 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // Verify password
+    // Verify password with bcrypt
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({
@@ -186,10 +255,10 @@ const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login error details:', error.message || error);
     return res.status(500).json({
       success: false,
-      message: 'Server error during login',
+      message: error.message || 'Server error during login',
     });
   }
 };
@@ -199,7 +268,7 @@ const loginUser = async (req, res) => {
 // @access  Private
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await findUserByEmail(req.user.email);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -209,10 +278,17 @@ const getMe = async (req, res) => {
 
     return res.json({
       success: true,
-      data: user,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        createdAt: user.createdAt,
+      },
     });
   } catch (error) {
-    console.error('getMe error:', error);
+    console.error('getMe error details:', error.message || error);
     return res.status(500).json({
       success: false,
       message: 'Server error retrieving user',
