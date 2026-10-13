@@ -7,8 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
     "seed:products": "node utils/seedProducts.js",
+    "seed:staff": "node utils/seedFreshMart.js",
     "start": "node server.js",
-    "seed": "node utils/seed.js"
+    "seed": "node utils/seedFreshMart.js"
   },
   "keywords": [],
   "author": "",
