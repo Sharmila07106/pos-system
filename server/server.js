@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config();
 
 const app = express();
@@ -39,12 +40,18 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5090;
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log('MongoDB Connected');
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+      console.log('MongoDB Connected successfully');
+    })
+    .catch((err) => {
+      console.error('MongoDB connection error:', err.message);
+    });
+} else {
+  console.warn('⚠️ Notice: MONGODB_URI is not set in server/.env. Configure MONGODB_URI to connect to MongoDB.');
+}
