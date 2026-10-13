@@ -1,10 +1,20 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const AuthLayout = () => {
-  const token = localStorage.getItem('token');
+  const { isAuthenticated, loading } = useAuth();
 
-  if (token) {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F7FB]">
+        <div className="w-8 h-8 rounded-full border-3 border-[#0FA38F] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  // Redirect logged-in users visiting /login or /register to the dashboard
+  if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
 
