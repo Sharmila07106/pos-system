@@ -29,12 +29,17 @@ const userSchema = new mongoose.Schema(
       enum: [
         'PLATFORM_SUPER_ADMIN',
         'PLATFORM_ADMIN',
+        'STORE_ADMIN',
         'STORE_OWNER',
         'INVENTORY_MANAGER',
         'CASHIER',
         'ADMIN',
+        'platform_super_admin',
+        'store_admin',
+        'inventory_manager',
+        'cashier',
       ],
-      default: 'CASHIER',
+      required: [true, 'User role is required'],
       index: true,
     },
     store: {
