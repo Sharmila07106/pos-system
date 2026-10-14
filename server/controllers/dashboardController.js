@@ -1,61 +1,83 @@
 const asyncHandler = require('express-async-handler');
+const mongoose = require('mongoose');
 const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 
-// @desc    Get dashboard statistics
+// @desc    Get dashboard statistics for current supermarket store
 // @route   GET /api/dashboard/stats
 // @access  Private
 const getDashboardStats = asyncHandler(async (req, res) => {
+  const storeId = req.storeId ? new mongoose.Types.ObjectId(req.storeId) : null;
+
+  if (!storeId && req.user.role !== 'PLATFORM_ADMIN') {
+    return res.json({
+      success: true,
+      data: {
+        todayRevenue: 0,
+        todaySalesCount: 0,
+        lowStockCount: 0,
+        chartData: [],
+      },
+    });
+  }
+
   // Today's boundaries
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
+  const saleMatch = { createdAt: { $gte: today }, status: 'COMPLETED' };
+  if (storeId) saleMatch.store = storeId;
+
   // 1. Today's Revenue & Sales Count
   const todaySales = await Sale.aggregate([
-    { $match: { createdAt: { $gte: today } } },
-    { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } }
+    { $match: saleMatch },
+    { $group: { _id: null, revenue: { $sum: '$total' }, count: { $sum: 1 } } },
   ]);
-  
+
   const revenue = todaySales.length > 0 ? todaySales[0].revenue : 0;
   const salesCount = todaySales.length > 0 ? todaySales[0].count : 0;
 
   // 2. Low Stock Products Count
-  // Find products where stock <= lowStockThreshold
-  const lowStockProducts = await Product.find({
+  const productMatch = {
     $expr: { $lte: ['$stock', '$lowStockThreshold'] },
-    isActive: true
-  }).countDocuments();
+    isActive: true,
+  };
+  if (storeId) productMatch.store = storeId;
+
+  const lowStockProducts = await Product.countDocuments(productMatch);
 
   // 3. Last 7 Days Revenue (for Chart)
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
+  const weeklyMatch = { createdAt: { $gte: sevenDaysAgo }, status: 'COMPLETED' };
+  if (storeId) weeklyMatch.store = storeId;
+
   const weeklySales = await Sale.aggregate([
-    { $match: { createdAt: { $gte: sevenDaysAgo } } },
+    { $match: weeklyMatch },
     {
       $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-        revenue: { $sum: "$total" }
-      }
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        revenue: { $sum: '$total' },
+      },
     },
-    { $sort: { "_id": 1 } }
+    { $sort: { _id: 1 } },
   ]);
 
-  // Format weekly sales for charts
-  const chartData = weeklySales.map(day => ({
+  const chartData = weeklySales.map((day) => ({
     name: day._id,
-    revenue: day.revenue
+    revenue: day.revenue,
   }));
 
-  res.json({
+  return res.json({
     success: true,
     data: {
       todayRevenue: revenue,
       todaySalesCount: salesCount,
       lowStockCount: lowStockProducts,
-      chartData
-    }
+      chartData,
+    },
   });
 });
 
