@@ -7,6 +7,7 @@ const {
   getStores,
   updateStoreStatus,
   getPlatformStats,
+  getAuditLogs,
 } = require('../controllers/platformController');
 const { protect, platformAdminOnly } = require('../middleware/authMiddleware');
 
@@ -15,6 +16,7 @@ router.use(protect);
 router.use(platformAdminOnly);
 
 router.get('/stats', getPlatformStats);
+router.get('/audit-logs', getAuditLogs);
 router.get('/applications', getApplications);
 router.get('/applications/:id', getApplicationById);
 router.put('/applications/:id/review', reviewApplication);

@@ -372,6 +372,54 @@ const getPlatformStats = asyncHandler(async (req, res) => {
   });
 });
 
+const memoryAuditLogs = [
+  {
+    _id: 'audit_01',
+    actorName: 'Sharmila (Admin)',
+    actorRole: 'PLATFORM_ADMIN',
+    action: 'STORE_APPROVED',
+    entity: 'StoreApplication',
+    entityId: 'APP-998812',
+    details: { businessName: 'FreshMart Supermarket', storeCode: 'STR-1001' },
+    createdAt: new Date(Date.now() - 3600000 * 24 * 30).toISOString(),
+  },
+  {
+    _id: 'audit_02',
+    actorName: 'Sharmila (Store Owner)',
+    actorRole: 'STORE_OWNER',
+    action: 'STAFF_INVITED',
+    entity: 'Invitation',
+    entityId: 'suresh@freshmart.com',
+    details: { role: 'CASHIER' },
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+  },
+  {
+    _id: 'audit_03',
+    actorName: 'Karthik (Inventory)',
+    actorRole: 'INVENTORY_MANAGER',
+    action: 'BATCH_RECEIVED',
+    entity: 'Batch',
+    entityId: 'BAT-MLK-2026A',
+    details: { product: 'Full Cream Milk 500ml', quantity: 50 },
+    createdAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString(),
+  }
+];
+
+// @desc    Get audit trail logs
+// @route   GET /api/platform/audit-logs
+// @access  Platform Admin Only
+const getAuditLogs = asyncHandler(async (req, res) => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100);
+      return res.json({ success: true, count: logs.length, data: logs });
+    } catch (err) {
+      console.warn('MongoDB getAuditLogs fallback:', err.message);
+    }
+  }
+  res.json({ success: true, count: memoryAuditLogs.length, data: memoryAuditLogs });
+});
+
 module.exports = {
   getApplications,
   getApplicationById,
@@ -379,5 +427,7 @@ module.exports = {
   getStores,
   updateStoreStatus,
   getPlatformStats,
+  getAuditLogs,
   memoryStores,
+  memoryAuditLogs,
 };

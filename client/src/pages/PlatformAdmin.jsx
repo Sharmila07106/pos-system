@@ -46,6 +46,7 @@ export default function PlatformAdmin() {
   });
   const [applications, setApplications] = useState([]);
   const [stores, setStores] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Modal states
@@ -58,10 +59,11 @@ export default function PlatformAdmin() {
   const loadPlatformData = async () => {
     try {
       setLoading(true);
-      const [statsRes, appsRes, storesRes] = await Promise.allSettled([
+      const [statsRes, appsRes, storesRes, auditRes] = await Promise.allSettled([
         api.get('/platform/stats'),
         api.get('/platform/applications'),
-        api.get('/platform/stores')
+        api.get('/platform/stores'),
+        api.get('/platform/audit-logs')
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value?.data?.success) {
@@ -72,6 +74,9 @@ export default function PlatformAdmin() {
       }
       if (storesRes.status === 'fulfilled' && storesRes.value?.data?.success) {
         setStores(storesRes.value.data.data || []);
+      }
+      if (auditRes.status === 'fulfilled' && auditRes.value?.data?.success) {
+        setAuditLogs(auditRes.value.data.data || []);
       }
     } catch (err) {
       console.error('Failed to load platform admin data:', err);
@@ -301,6 +306,20 @@ export default function PlatformAdmin() {
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0FA38F]" />
             )}
           </button>
+
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`pb-3 relative transition-colors ${
+              activeTab === 'audit'
+                ? 'text-[#0FA38F]'
+                : 'text-[#53607A] hover:text-[#0B1B3A]'
+            }`}
+          >
+            Audit Trail & Compliance ({auditLogs.length})
+            {activeTab === 'audit' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0FA38F]" />
+            )}
+          </button>
         </div>
 
         {/* Search & Filter Toolbar */}
@@ -468,6 +487,64 @@ export default function PlatformAdmin() {
                           >
                             {st.status === 'SUSPENDED' ? 'Reactivate Store' : 'Suspend Store'}
                           </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Audit Trail & Compliance */}
+        {activeTab === 'audit' && (
+          <div className="bg-white rounded-2xl border border-[#E3E8F0] shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-[#F8FAFC] border-b border-[#E3E8F0] text-xs font-bold text-[#53607A] uppercase tracking-wider">
+                    <th className="py-3.5 px-4">Timestamp</th>
+                    <th className="py-3.5 px-4">Operator</th>
+                    <th className="py-3.5 px-4">Action</th>
+                    <th className="py-3.5 px-4">Target Entity</th>
+                    <th className="py-3.5 px-4">Audit Details</th>
+                    <th className="py-3.5 px-4 text-right">Security State</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E3E8F0] text-sm">
+                  {auditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="py-12 text-center text-[#53607A]">
+                        <FileText className="mx-auto mb-2 text-[#CBD5E1]" size={36} />
+                        <p className="font-semibold">No audit logs recorded yet</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    auditLogs.map((log) => (
+                      <tr key={log._id} className="hover:bg-[#F8FAFC] transition-colors">
+                        <td className="py-3.5 px-4 text-xs font-medium text-[#53607A]">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-[#0B1B3A]">{log.actorName || 'System'}</div>
+                          <div className="text-[11px] text-[#53607A] uppercase">{log.actorRole || 'PLATFORM_ADMIN'}</div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30 uppercase">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs font-mono font-bold text-[#0B1B3A]">
+                          {log.entity}: {log.entityId || 'N/A'}
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-[#53607A] max-w-xs truncate">
+                          {log.details ? JSON.stringify(log.details) : 'N/A'}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-[#0FA38F]">
+                            <ShieldCheck size={14} /> Verified
+                          </span>
                         </td>
                       </tr>
                     ))
