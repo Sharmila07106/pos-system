@@ -331,8 +331,10 @@ const Home = () => {
       <footer className="border-t border-[#E3E8F0] py-12 bg-[#F4F7FB]">
         <div className="max-w-[1440px] mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6 text-sm text-[#8B96AB]">
           <StoreFlowLogo size={28} variant="dark" />
-          <div className="font-semibold text-xs text-[#53607A]">
-            Built with the MERN stack • MongoDB Atlas, Express, React, Node.js
+          <div className="flex items-center gap-4 font-semibold text-xs text-[#53607A]">
+            <Link to="/platform-admin" className="hover:text-[#0FA38F] transition-colors flex items-center gap-1">
+              <ShieldCheck size={13} /> Platform Admin Evaluation
+            </Link>
           </div>
           <div>
             &copy; {new Date().getFullYear()} StoreFlow POS. All rights reserved.
