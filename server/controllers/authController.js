@@ -133,7 +133,7 @@ const registerStore = async (req, res) => {
       name: ownerName.trim(),
       email: cleanEmail,
       password,
-      role: 'STORE_OWNER',
+      role: 'store_admin',
       store: newStore._id,
       status: 'Active',
       isActive: true,
@@ -158,7 +158,7 @@ const registerStore = async (req, res) => {
     await ActivityLog.create({
       actor: newUser._id,
       actorName: newUser.name,
-      actorRole: 'STORE_OWNER',
+      actorRole: 'store_admin',
       store: newStore._id,
       action: 'STORE_REGISTRATION_SUBMITTED',
       targetType: 'Store',
@@ -171,13 +171,10 @@ const registerStore = async (req, res) => {
       ipAddress: req.ip || '',
     }).catch(() => {});
 
-    // Generate JWT token so owner can log in to check status
-    const token = generateToken(newUser._id);
-
+    // Target flow: NO auto-login. Registration submitted, waiting for platform approval.
     return res.status(201).json({
       success: true,
-      message: 'Supermarket registration submitted successfully! Your application is under review by Platform Admin.',
-      token,
+      message: 'Registration submitted, waiting for platform approval',
       data: {
         user: {
           _id: newUser._id,
@@ -214,101 +211,20 @@ const registerStore = async (req, res) => {
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-  try {
-    const { name, email, password } = req.body || {};
-
-    if (!name || typeof name !== 'string') {
-      return res.status(400).json({
-        success: false,
-        message: 'Name is required',
-      });
+  // If storeName is provided, forward to supermarket registration
+  if (req.body?.storeName) {
+    if (!req.body.ownerName && req.body.name) {
+      req.body.ownerName = req.body.name;
     }
-
-    const trimmedName = name.trim();
-    if (trimmedName.length < 2 || trimmedName.length > 60) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name must be between 2 and 60 characters',
-      });
-    }
-
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({
-        success: false,
-        message: 'Email is required',
-      });
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a valid email address',
-      });
-    }
-
-    if (!password || typeof password !== 'string' || password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 8 characters',
-      });
-    }
-
-    if (!/^(?=.*[A-Za-z])(?=.*\d)/.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must contain at least one letter and one number',
-      });
-    }
-
-    const existingUser = await User.findOne({ email: cleanEmail });
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
-        message: 'An account with this email already exists',
-      });
-    }
-
-    const userCount = await User.countDocuments();
-    const assignedRole = userCount === 0 ? 'ADMIN' : 'CASHIER';
-
-    const user = await User.create({
-      name: name.trim(),
-      email: cleanEmail,
-      password,
-      role: assignedRole,
-      status: 'Active',
-      isActive: true,
-    });
-
-    const token = generateToken(user._id);
-
-    return res.status(201).json({
-      success: true,
-      message: 'Account registered successfully',
-      token,
-      data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        createdAt: user.createdAt,
-      },
-    });
-  } catch (error) {
-    console.error('registerUser error:', error);
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: 'An account with this email already exists',
-      });
-    }
-    return res.status(500).json({
-      success: false,
-      message: error.message || 'Server error during registration',
-    });
+    return registerStore(req, res);
   }
+
+  // Public staff sign-up is forbidden. Staff must be invited by their store admin.
+  return res.status(400).json({
+    success: false,
+    message:
+      'Public registration is only available for supermarkets. Staff members must be invited by their store administrator.',
+  });
 };
 
 // @desc    Authenticate user & get token
@@ -392,6 +308,42 @@ const loginUser = async (req, res) => {
         success: false,
         message: 'Your account has been deactivated. Please contact your administrator.',
       });
+    }
+
+    // Check store status (pending, rejected, or suspended stores cannot log in)
+    const isPlatformAdminUser =
+      user.role === 'PLATFORM_SUPER_ADMIN' ||
+      user.role === 'PLATFORM_ADMIN' ||
+      user.role === 'platform_super_admin' ||
+      user.isPlatformAdmin === true;
+
+    if (!isPlatformAdminUser && user.store) {
+      let storeObj = user.store;
+      if (!storeObj.status && mongoose.Types.ObjectId.isValid(storeObj)) {
+        storeObj = await Store.findById(storeObj);
+      }
+      const storeStatus = (storeObj?.status || '').toUpperCase();
+      if (storeStatus === 'PENDING') {
+        return res.status(403).json({
+          success: false,
+          code: 'STORE_PENDING',
+          message: 'Registration submitted, waiting for platform approval',
+        });
+      }
+      if (storeStatus === 'REJECTED') {
+        return res.status(403).json({
+          success: false,
+          code: 'STORE_REJECTED',
+          message: 'Supermarket registration was rejected. Please contact platform administration.',
+        });
+      }
+      if (storeStatus === 'SUSPENDED') {
+        return res.status(403).json({
+          success: false,
+          code: 'STORE_SUSPENDED',
+          message: 'Supermarket account has been suspended by platform administration.',
+        });
+      }
     }
 
     // Record successful login audit event
@@ -509,10 +461,19 @@ const googleAuth = async (req, res) => {
         }
       }
 
+      // Check account status
+      if (user.isActive === false || user.status === 'Disabled') {
+        return res.status(403).json({
+          success: false,
+          message: 'Your account has been deactivated. Please contact your administrator.',
+        });
+      }
+
       // If user has platform super admin privileges, verify their email is explicitly allowlisted
       const isSuperAdminRole =
         user.role === 'PLATFORM_SUPER_ADMIN' ||
         user.role === 'PLATFORM_ADMIN' ||
+        user.role === 'platform_super_admin' ||
         user.isPlatformAdmin;
 
       if (isSuperAdminRole && !adminAllowlist.includes(cleanEmail)) {
@@ -520,6 +481,36 @@ const googleAuth = async (req, res) => {
           success: false,
           message: 'Platform administrator Google account email is not in the verified allowlist.',
         });
+      }
+
+      // Check store status (pending, rejected, or suspended stores cannot log in)
+      if (!isSuperAdminRole && user.store) {
+        let storeObj = user.store;
+        if (!storeObj.status && mongoose.Types.ObjectId.isValid(storeObj)) {
+          storeObj = await Store.findById(storeObj);
+        }
+        const storeStatus = (storeObj?.status || '').toUpperCase();
+        if (storeStatus === 'PENDING') {
+          return res.status(403).json({
+            success: false,
+            code: 'STORE_PENDING',
+            message: 'Registration submitted, waiting for platform approval',
+          });
+        }
+        if (storeStatus === 'REJECTED') {
+          return res.status(403).json({
+            success: false,
+            code: 'STORE_REJECTED',
+            message: 'Supermarket registration was rejected. Please contact platform administration.',
+          });
+        }
+        if (storeStatus === 'SUSPENDED') {
+          return res.status(403).json({
+            success: false,
+            code: 'STORE_SUSPENDED',
+            message: 'Supermarket account has been suspended by platform administration.',
+          });
+        }
       }
 
       user.lastLoginAt = new Date();
@@ -531,14 +522,12 @@ const googleAuth = async (req, res) => {
       const isConfiguredAdmin = adminAllowlist.includes(cleanEmail);
       const userCount = await User.countDocuments();
 
-      let assignedRole = 'CASHIER';
+      let assignedRole = 'store_admin';
       let isPlatformAdmin = false;
 
       if (isConfiguredAdmin) {
         assignedRole = 'PLATFORM_SUPER_ADMIN';
         isPlatformAdmin = true;
-      } else if (userCount === 0) {
-        assignedRole = 'ADMIN';
       }
 
       // Generate random high-entropy password for OAuth user
