@@ -2,31 +2,53 @@ const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema(
   {
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Store',
+      required: true,
+      unique: true,
+      index: true,
+    },
     storeName: {
       type: String,
-      required: true,
-      default: 'NovaPOS Store',
+      default: '',
+      trim: true,
     },
     address: {
       type: String,
-      default: '123, MG Road, Chennai - 600028',
+      default: '',
+      trim: true,
     },
     phone: {
       type: String,
-      default: '+91 9876543210',
+      default: '',
+      trim: true,
     },
     taxRatePercent: {
       type: Number,
       default: 5,
+      min: 0,
+      max: 100,
     },
     currency: {
       type: String,
       default: 'INR',
+      trim: true,
     },
     receiptFooter: {
       type: String,
-      default: 'Thank you! Visit again!',
-    }
+      default: 'Thank you for shopping with us!',
+      trim: true,
+    },
+    lowStockThresholdGlobal: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    allowNegativeStock: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
