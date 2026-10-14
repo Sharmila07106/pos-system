@@ -78,9 +78,19 @@ const protect = async (req, res, next) => {
   }
 };
 
+// Helper to verify if user has platform-level super admin authority
+const isPlatformSuperAdmin = (user) => {
+  if (!user) return false;
+  return (
+    user.role === 'PLATFORM_SUPER_ADMIN' ||
+    user.role === 'PLATFORM_ADMIN' ||
+    user.isPlatformAdmin === true
+  );
+};
+
 // Strict Platform Administrator only
 const platformAdminOnly = (req, res, next) => {
-  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin === true)) {
+  if (isPlatformSuperAdmin(req.user)) {
     return next();
   }
   return res.status(403).json({
@@ -91,7 +101,7 @@ const platformAdminOnly = (req, res, next) => {
 
 // Forbid Platform Admin from executing checkout / POS sales
 const forbidPlatformAdmin = (req, res, next) => {
-  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin === true)) {
+  if (isPlatformSuperAdmin(req.user)) {
     return res.status(403).json({
       success: false,
       message: 'Platform administrators cannot perform direct store checkout or sales operations.',
@@ -106,8 +116,7 @@ const storeOwnerOnly = (req, res, next) => {
     req.user &&
     (req.user.role === 'STORE_OWNER' ||
       req.user.role === 'ADMIN' ||
-      req.user.role === 'PLATFORM_ADMIN' ||
-      req.user.isPlatformAdmin)
+      isPlatformSuperAdmin(req.user))
   ) {
     return next();
   }
@@ -128,7 +137,7 @@ const requireRole = (...allowedRoles) => {
     }
 
     // Platform admin has broad administrative access across general management endpoints
-    if (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin) {
+    if (isPlatformSuperAdmin(req.user)) {
       return next();
     }
 
@@ -155,7 +164,7 @@ const adminOnly = (req, res, next) => {
     req.user &&
     (req.user.role === 'ADMIN' ||
       req.user.role === 'STORE_OWNER' ||
-      req.user.role === 'PLATFORM_ADMIN')
+      isPlatformSuperAdmin(req.user))
   ) {
     return next();
   }
@@ -168,7 +177,7 @@ const adminOnly = (req, res, next) => {
 // Store Scope & Operational Status Middleware
 const requireActiveStore = async (req, res, next) => {
   // Platform admins are exempt from store operational lockdown
-  if (req.user?.role === 'PLATFORM_ADMIN' || req.user?.isPlatformAdmin) {
+  if (isPlatformSuperAdmin(req.user)) {
     return next();
   }
 
