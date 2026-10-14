@@ -134,23 +134,32 @@ const createProduct = asyncHandler(async (req, res) => {
     throw new Error('Store context required to create product');
   }
 
-  const {
-    name,
-    barcode,
-    category,
-    price,
-    stock,
-    lowStockThreshold,
-    image,
-    supplier,
-    expiryDate,
-    sku,
-    costPrice,
-  } = req.body;
+  const body = req.body || {};
+  const name = body.name ? body.name.trim() : '';
+  const barcode = body.barcode ? body.barcode.trim() : '';
+  const category = body.category ? body.category.trim() : 'General';
+  const price = body.price !== undefined ? Number(body.price) : 0;
+  const stock = body.stock !== undefined ? Number(body.stock) : 0;
+  const lowStockThreshold = body.lowStockThreshold !== undefined ? Number(body.lowStockThreshold) : 5;
+  const supplier = body.supplier ? body.supplier.trim() : '';
+  const expiryDate = body.expiryDate ? new Date(body.expiryDate) : null;
+  const sku = body.sku ? body.sku.trim() : '';
+  const costPrice = body.costPrice !== undefined ? Number(body.costPrice) : 0;
+  const image = req.file ? `/uploads/${req.file.filename}` : (body.image || '');
+
+  if (!name) {
+    res.status(400);
+    throw new Error('Product name is required');
+  }
+
+  if (!barcode) {
+    res.status(400);
+    throw new Error('Barcode is required');
+  }
 
   const productExists = await Product.findOne({
     store: storeId,
-    barcode: barcode.trim(),
+    barcode,
   });
 
   if (productExists) {
@@ -160,17 +169,17 @@ const createProduct = asyncHandler(async (req, res) => {
 
   const product = await Product.create({
     store: storeId,
-    name: name.trim(),
-    barcode: barcode.trim(),
-    category: category.trim(),
+    name,
+    barcode,
+    category,
     price,
-    stock: stock || 0,
-    lowStockThreshold: lowStockThreshold !== undefined ? lowStockThreshold : 5,
-    supplier: supplier ? supplier.trim() : '',
-    expiryDate: expiryDate ? new Date(expiryDate) : null,
-    sku: sku ? sku.trim() : '',
-    costPrice: costPrice !== undefined ? Number(costPrice) : 0,
-    image: image || '',
+    stock,
+    lowStockThreshold,
+    supplier,
+    expiryDate,
+    sku,
+    costPrice,
+    image,
   });
 
   return res.status(201).json({ success: true, data: product });
@@ -192,10 +201,11 @@ const updateProduct = asyncHandler(async (req, res) => {
     throw new Error('Unauthorized access to product from another store');
   }
 
-  if (req.body.barcode && req.body.barcode.trim() !== product.barcode) {
+  const body = req.body || {};
+  if (body.barcode && body.barcode.trim() !== product.barcode) {
     const barcodeExists = await Product.findOne({
       store: product.store,
-      barcode: req.body.barcode.trim(),
+      barcode: body.barcode.trim(),
       _id: { $ne: product._id },
     });
     if (barcodeExists) {
@@ -204,7 +214,15 @@ const updateProduct = asyncHandler(async (req, res) => {
     }
   }
 
-  const updatedProduct = await Product.findByIdAndUpdate(req.params.id, req.body, {
+  const updateData = { ...body };
+  if (req.file) {
+    updateData.image = `/uploads/${req.file.filename}`;
+  }
+  if (updateData.price !== undefined) updateData.price = Number(updateData.price);
+  if (updateData.stock !== undefined) updateData.stock = Number(updateData.stock);
+  if (updateData.lowStockThreshold !== undefined) updateData.lowStockThreshold = Number(updateData.lowStockThreshold);
+
+  const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
     runValidators: true,
   });

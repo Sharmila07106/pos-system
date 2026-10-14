@@ -60,7 +60,7 @@ const canManageProducts = requireRole(
 
 router.route('/')
   .get(getProducts)
-  .post(canManageProducts, createProduct);
+  .post(canManageProducts, upload.single('image'), createProduct);
 
 router.post('/upload-image', canManageProducts, upload.single('image'), uploadImage);
 
@@ -69,7 +69,7 @@ router.get('/barcode/:barcode', getProductByBarcode);
 
 router.route('/:id')
   .get(getProductById)
-  .put(canManageProducts, updateProduct)
+  .put(canManageProducts, upload.single('image'), updateProduct)
   .delete(canManageProducts, deleteProduct);
 
 module.exports = router;
