@@ -15,7 +15,7 @@ async function seedPlatformAdmin() {
   const password =
     process.env.PLATFORM_ADMIN_PASSWORD ||
     process.env.SEED_ADMIN_PASSWORD ||
-    'sharmi12345';
+    'sharmi1234';
 
   const name =
     process.env.PLATFORM_ADMIN_NAME ||
