@@ -26,7 +26,14 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['PLATFORM_ADMIN', 'STORE_OWNER', 'INVENTORY_MANAGER', 'CASHIER', 'ADMIN'],
+      enum: [
+        'PLATFORM_SUPER_ADMIN',
+        'PLATFORM_ADMIN',
+        'STORE_OWNER',
+        'INVENTORY_MANAGER',
+        'CASHIER',
+        'ADMIN',
+      ],
       default: 'CASHIER',
       index: true,
     },
@@ -54,6 +61,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
       trim: true,
+    },
+    googleId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    authProvider: {
+      type: String,
+      enum: ['LOCAL', 'GOOGLE'],
+      default: 'LOCAL',
     },
     lastLoginAt: {
       type: Date,
@@ -99,6 +116,12 @@ userSchema.pre('save', async function () {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
   }
+
+  // Ensure Platform Admins have isPlatformAdmin set to true
+  if (this.role === 'PLATFORM_SUPER_ADMIN' || this.role === 'PLATFORM_ADMIN') {
+    this.isPlatformAdmin = true;
+  }
+
   // Sync isActive and status
   if (this.isModified('status')) {
     this.isActive = this.status === 'Active';
