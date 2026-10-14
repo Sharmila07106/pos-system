@@ -6,6 +6,11 @@ const saleItemSchema = new mongoose.Schema({
     ref: 'Product',
     required: true
   },
+  batch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Batch'
+  },
+  batchNumber: { type: String, default: '' },
   name: { type: String, required: true },
   barcode: { type: String, required: true },
   quantity: { type: Number, required: true, min: 1 },
@@ -15,10 +20,16 @@ const saleItemSchema = new mongoose.Schema({
 
 const saleSchema = new mongoose.Schema(
   {
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Store',
+      index: true,
+    },
     transactionId: {
       type: String,
       required: true,
-      unique: true
+      unique: true,
+      index: true,
     },
     items: [saleItemSchema],
     subtotal: { type: Number, required: true },
@@ -33,12 +44,19 @@ const saleSchema = new mongoose.Schema(
     },
     amountReceived: { type: Number },
     changeGiven: { type: Number },
+    status: {
+      type: String,
+      enum: ['COMPLETED', 'REFUNDED', 'CANCELLED'],
+      default: 'COMPLETED',
+      index: true,
+    },
+    refundReason: { type: String, default: '' },
     cashier: {
-      type: String, // Ideally ObjectId referencing User, using String for now as we mock auth
+      type: String,
       required: true,
       default: 'Admin'
     },
-    cashierName: { type: String, default: 'Sharmila U' }
+    cashierName: { type: String, default: 'Sharmila' }
   },
   {
     timestamps: true,

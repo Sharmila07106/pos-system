@@ -18,6 +18,21 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Category is required'],
     },
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Store',
+      index: true,
+    },
+    sku: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    costPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     price: {
       type: Number,
       required: [true, 'Price is required'],

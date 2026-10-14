@@ -26,8 +26,21 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['ADMIN', 'INVENTORY_MANAGER', 'CASHIER'],
+      enum: ['PLATFORM_ADMIN', 'STORE_OWNER', 'ADMIN', 'INVENTORY_MANAGER', 'CASHIER'],
       default: 'CASHIER',
+    },
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Store',
+      index: true,
+    },
+    isPlatformAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    phone: {
+      type: String,
+      default: '',
     },
     status: {
       type: String,

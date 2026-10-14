@@ -2,14 +2,23 @@ const mongoose = require('mongoose');
 
 const stockMovementSchema = new mongoose.Schema(
   {
+    store: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Store',
+      index: true,
+    },
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
       required: true
     },
+    batch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Batch'
+    },
     type: {
       type: String,
-      enum: ['SALE', 'ADJUSTMENT', 'RESTOCK'],
+      enum: ['SALE', 'ADJUSTMENT', 'RESTOCK', 'WASTE', 'REFUND'],
       required: true
     },
     quantityChange: {
