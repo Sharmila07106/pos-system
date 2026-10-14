@@ -14,6 +14,9 @@ import Users from './pages/Users';
 import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
 import Home from './pages/Home';
+import SupermarketOnboarding from './pages/SupermarketOnboarding';
+import ApplicationStatus from './pages/ApplicationStatus';
+import ActivateStaff from './pages/ActivateStaff';
 
 function App() {
   return (
@@ -47,6 +50,9 @@ function App() {
         />
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/onboard" element={<SupermarketOnboarding />} />
+          <Route path="/application-status" element={<ApplicationStatus />} />
+          <Route path="/activate-staff" element={<ActivateStaff />} />
           
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />

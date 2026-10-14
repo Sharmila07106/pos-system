@@ -71,6 +71,10 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const setSession = (tokenVal, userVal, rememberMe = true) => {
+    saveAuthSession(tokenVal, userVal, rememberMe);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -80,6 +84,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!token && !!user,
         login,
         register,
+        setSession,
         logout,
       }}
     >

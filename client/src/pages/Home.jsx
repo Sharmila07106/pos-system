@@ -34,15 +34,20 @@ const Home = () => {
             <a href="#hero" className="hover:text-[#0FA38F] transition-colors">Home</a>
             <a href="#features" className="hover:text-[#0FA38F] transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-[#0FA38F] transition-colors">How it works</a>
-            <a href="#roles" className="hover:text-[#0FA38F] transition-colors">Roles</a>
-            <a href="#contact" className="hover:text-[#0FA38F] transition-colors">Contact</a>
+            <Link to="/onboard" className="text-[#0FA38F] hover:underline font-extrabold transition-colors">Register Supermarket</Link>
+            <Link to="/application-status" className="hover:text-[#0FA38F] transition-colors">Track Status</Link>
           </nav>
 
           <div className="flex items-center gap-3">
+            <Link to="/onboard" className="hidden sm:inline-block">
+              <Button variant="outline" size="sm" className="border-[#0FA38F]/40 text-[#0FA38F] hover:bg-[#E2F6F3]/50">
+                Register Store
+              </Button>
+            </Link>
             {token ? (
               <Link to="/dashboard">
                 <Button variant="primary" size="md">
-                  Go to Dashboard <ArrowRight size={16} />
+                  Dashboard <ArrowRight size={16} />
                 </Button>
               </Link>
             ) : (
@@ -81,14 +86,17 @@ const Home = () => {
             <div className="flex flex-wrap items-center gap-4 pt-2">
               <Link to={token ? "/dashboard" : "/login"}>
                 <Button variant="primary" size="lg" className="shadow-[0_4px_16px_rgba(15,163,143,0.4)]">
-                  {token ? "Open Register" : "Get Started Now"} <ArrowRight size={18} />
+                  {token ? "Open Register" : "Login to POS"} <ArrowRight size={18} />
                 </Button>
               </Link>
-              <a href="#features">
-                <Button variant="outline" size="lg" className="border-white/20 bg-white/5 text-white hover:bg-white/10">
-                  See features
+              <Link to="/onboard">
+                <Button variant="outline" size="lg" className="border-[#0FA38F]/40 bg-[#0FA38F]/10 text-white hover:bg-[#0FA38F]/20 font-bold">
+                  Register Supermarket
                 </Button>
-              </a>
+              </Link>
+              <Link to="/application-status" className="text-xs font-bold text-white/70 hover:text-white underline">
+                Track Application
+              </Link>
             </div>
 
             <div className="pt-8 border-t border-white/10 flex items-center gap-8 text-xs font-bold text-white/70 uppercase tracking-wider">
