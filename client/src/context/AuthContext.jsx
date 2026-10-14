@@ -65,10 +65,20 @@ export const AuthProvider = ({ children }) => {
   const register = async ({ name, email, password, rememberMe = true }) => {
     const res = await api.post('/auth/register', { name, email, password });
     if (res.data?.success) {
-      saveAuthSession(res.data.token, res.data.data, rememberMe);
+      if (res.data.token) {
+        saveAuthSession(res.data.token, res.data.data, rememberMe);
+      }
       return res.data;
     }
     throw new Error(res.data?.message || 'Registration failed');
+  };
+
+  const registerStore = async (storeData) => {
+    const res = await api.post('/auth/register-store', storeData);
+    if (res.data?.success) {
+      return res.data;
+    }
+    throw new Error(res.data?.message || 'Supermarket registration failed');
   };
 
   const logout = () => {
@@ -94,6 +104,7 @@ export const AuthProvider = ({ children }) => {
         login,
         loginWithGoogle,
         register,
+        registerStore,
         setSession,
         logout,
       }}
