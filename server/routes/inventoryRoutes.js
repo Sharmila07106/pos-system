@@ -10,9 +10,13 @@ const {
   getWasteAnalytics,
   getExpiryAlerts,
 } = require('../controllers/inventoryController');
-const { protect } = require('../middleware/authMiddleware');
+const {
+  protect,
+  requireActiveStore,
+} = require('../middleware/authMiddleware');
 
 router.use(protect);
+router.use(requireActiveStore);
 
 // Movements & adjustments
 router.route('/movements').get(getStockMovements);

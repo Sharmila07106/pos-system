@@ -10,23 +10,31 @@ const {
   revokeInvitation,
 } = require('../controllers/userController');
 const { loginUser } = require('../controllers/authController');
-const { protect, storeOwnerOnly, adminOnly } = require('../middleware/authMiddleware');
+const {
+  protect,
+  requireActiveStore,
+  storeOwnerOnly,
+} = require('../middleware/authMiddleware');
 
 // For backwards compatibility with any existing client calls
 router.post('/login', loginUser);
 
+// All staff and user management endpoints require active approved store and owner/admin privileges
+router.use(protect);
+router.use(requireActiveStore);
+
 // Staff Invitation endpoints
-router.post('/invite', protect, storeOwnerOnly, inviteStaff);
-router.post('/invite/:id/resend', protect, storeOwnerOnly, resendInvitation);
-router.delete('/invite/:id', protect, storeOwnerOnly, revokeInvitation);
+router.post('/invite', storeOwnerOnly, inviteStaff);
+router.post('/invite/:id/resend', storeOwnerOnly, resendInvitation);
+router.delete('/invite/:id', storeOwnerOnly, revokeInvitation);
 
 // User management endpoints (Owner / Admin only)
 router.route('/')
-  .get(protect, storeOwnerOnly, getUsers)
-  .post(protect, storeOwnerOnly, createUser);
+  .get(storeOwnerOnly, getUsers)
+  .post(storeOwnerOnly, createUser);
 
 router.route('/:id')
-  .put(protect, storeOwnerOnly, updateUser)
-  .delete(protect, storeOwnerOnly, deleteUser);
+  .put(storeOwnerOnly, updateUser)
+  .delete(storeOwnerOnly, deleteUser);
 
 module.exports = router;

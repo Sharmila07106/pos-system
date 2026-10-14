@@ -1,16 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { getSettings, updateSettings } = require('../controllers/settingsController');
+const {
+  protect,
+  requireActiveStore,
+  storeOwnerOnly,
+} = require('../middleware/authMiddleware');
 
-// Using dummy middleware until real auth is plugged in for this phase
-const protect = (req, res, next) => {
-  req.user = { role: 'ADMIN' }; // dummy user
-  next();
-};
-const authorize = (...roles) => (req, res, next) => next();
+router.use(protect);
+router.use(requireActiveStore);
 
 router.route('/')
-  .get(protect, getSettings)
-  .put(protect, authorize('ADMIN'), updateSettings);
+  .get(getSettings)
+  .put(storeOwnerOnly, updateSettings);
 
 module.exports = router;

@@ -1,15 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { createSale, getSales } = require('../controllers/salesController');
+const {
+  protect,
+  requireActiveStore,
+  forbidPlatformAdmin,
+} = require('../middleware/authMiddleware');
 
-// Dummy auth for now
-const protect = (req, res, next) => {
-  req.user = { _id: '123', name: 'Admin', role: 'ADMIN' };
-  next();
-};
+router.use(protect);
+router.use(requireActiveStore);
 
 router.route('/')
-  .post(protect, createSale)
-  .get(protect, getSales);
+  .post(forbidPlatformAdmin, createSale)
+  .get(getSales);
 
 module.exports = router;

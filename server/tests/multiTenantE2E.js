@@ -224,6 +224,159 @@ async function runMultiTenantTestSuite() {
     assert(nextCalled === true, 'Active store passes requireActiveStore guard successfully');
   }
 
+  // TEST 4b: Platform Super Admin Approves Store -> ACTIVE
+  {
+    const origFindById = Store.findById;
+    const origUserUpdateOne = User.updateOne;
+    const origActivityCreate = ActivityLog.create;
+
+    let userUpdated = false;
+    User.updateOne = async () => {
+      userUpdated = true;
+      return { modifiedCount: 1 };
+    };
+    ActivityLog.create = async () => ({});
+
+    const mockStoreDoc = {
+      _id: 'store_mock_001',
+      name: 'Fresh Mart Supermarket',
+      status: 'PENDING',
+      ownerUser: 'user_mock_001',
+      save: async function () { return this; },
+    };
+    Store.findById = async () => mockStoreDoc;
+
+    const { req, res } = mockReqRes(
+      { status: 'ACTIVE', statusReason: 'Verified documentation' },
+      {},
+      { id: 'store_mock_001' },
+      { _id: 'platform_super_admin_id', role: 'PLATFORM_SUPER_ADMIN', name: 'Super Admin' }
+    );
+
+    await updateStoreStatus(req, res);
+
+    assert(
+      res.statusCode === 200 &&
+        res.data?.data?.status === 'ACTIVE' &&
+        userUpdated === true,
+      'Platform Super Admin approves store to ACTIVE and activates owner user'
+    );
+
+    Store.findById = origFindById;
+    User.updateOne = origUserUpdateOne;
+    ActivityLog.create = origActivityCreate;
+  }
+
+  // TEST 4c: Platform Super Admin Suspends Store -> SUSPENDED (locks operational APIs)
+  {
+    const origFindById = Store.findById;
+    const origActivityCreate = ActivityLog.create;
+    ActivityLog.create = async () => ({});
+
+    const mockStoreDoc = {
+      _id: 'store_mock_001',
+      name: 'Fresh Mart Supermarket',
+      status: 'ACTIVE',
+      ownerUser: 'user_mock_001',
+      save: async function () { return this; },
+    };
+    Store.findById = async () => mockStoreDoc;
+
+    const { req, res } = mockReqRes(
+      { status: 'SUSPENDED', statusReason: 'Audit pending' },
+      {},
+      { id: 'store_mock_001' },
+      { _id: 'platform_super_admin_id', role: 'PLATFORM_SUPER_ADMIN', name: 'Super Admin' }
+    );
+
+    await updateStoreStatus(req, res);
+
+    assert(
+      res.statusCode === 200 &&
+        res.data?.data?.status === 'SUSPENDED',
+      'Platform Super Admin suspends store to SUSPENDED'
+    );
+
+    // Verify operational API guard blocks this suspended store
+    const guardReqRes = mockReqRes();
+    guardReqRes.req.user = {
+      _id: 'user_mock_001',
+      role: 'store_admin',
+      store: mockStoreDoc,
+    };
+    guardReqRes.req.storeId = 'store_mock_001';
+
+    let nextCalled = false;
+    await requireActiveStore(guardReqRes.req, guardReqRes.res, () => {
+      nextCalled = true;
+    });
+
+    assert(
+      guardReqRes.res.statusCode === 403 &&
+        guardReqRes.res.data?.code === 'STORE_SUSPENDED' &&
+        !nextCalled,
+      'Suspended store is blocked by requireActiveStore middleware'
+    );
+
+    Store.findById = origFindById;
+    ActivityLog.create = origActivityCreate;
+  }
+
+  // TEST 4d: Platform Super Admin Rejects Store -> REJECTED (locks operational APIs)
+  {
+    const origFindById = Store.findById;
+    const origActivityCreate = ActivityLog.create;
+    ActivityLog.create = async () => ({});
+
+    const mockStoreDoc = {
+      _id: 'store_mock_001',
+      name: 'Fresh Mart Supermarket',
+      status: 'PENDING',
+      ownerUser: 'user_mock_001',
+      save: async function () { return this; },
+    };
+    Store.findById = async () => mockStoreDoc;
+
+    const { req, res } = mockReqRes(
+      { status: 'REJECTED', statusReason: 'Invalid business license' },
+      {},
+      { id: 'store_mock_001' },
+      { _id: 'platform_super_admin_id', role: 'PLATFORM_SUPER_ADMIN', name: 'Super Admin' }
+    );
+
+    await updateStoreStatus(req, res);
+
+    assert(
+      res.statusCode === 200 &&
+        res.data?.data?.status === 'REJECTED',
+      'Platform Super Admin rejects store to REJECTED'
+    );
+
+    // Verify operational API guard blocks this rejected store
+    const guardReqRes = mockReqRes();
+    guardReqRes.req.user = {
+      _id: 'user_mock_001',
+      role: 'store_admin',
+      store: mockStoreDoc,
+    };
+    guardReqRes.req.storeId = 'store_mock_001';
+
+    let nextCalled = false;
+    await requireActiveStore(guardReqRes.req, guardReqRes.res, () => {
+      nextCalled = true;
+    });
+
+    assert(
+      guardReqRes.res.statusCode === 403 &&
+        guardReqRes.res.data?.code === 'STORE_REJECTED' &&
+        !nextCalled,
+      'Rejected store is blocked by requireActiveStore middleware'
+    );
+
+    Store.findById = origFindById;
+    ActivityLog.create = origActivityCreate;
+  }
+
   // TEST 5: Platform Admin Guard - Blocked from Sales / POS Checkout
   console.log('\n--- SUITE 3: Role Boundaries Matrix ---');
   {

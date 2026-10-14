@@ -10,18 +10,13 @@ const {
   createProduct,
   updateProduct,
   deleteProduct,
-  uploadImage
+  uploadImage,
 } = require('../controllers/productController');
-
-// Placeholder middlewares (assume authMiddleware exists)
-// const { protect, authorize } = require('../middleware/authMiddleware');
-
-// Using dummy middleware until real auth is plugged in for this phase
-const protect = (req, res, next) => {
-  req.user = { role: 'ADMIN' }; // dummy user
-  next();
-};
-const authorize = (...roles) => (req, res, next) => next();
+const {
+  protect,
+  requireRole,
+  requireActiveStore,
+} = require('../middleware/authMiddleware');
 
 // Multer config for image upload
 const storage = multer.diskStorage({
@@ -30,7 +25,7 @@ const storage = multer.diskStorage({
   },
   filename(req, file, cb) {
     cb(null, `product-${Date.now()}${path.extname(file.originalname)}`);
-  }
+  },
 });
 
 const checkFileType = (file, cb) => {
@@ -48,21 +43,33 @@ const upload = multer({
   storage,
   fileFilter: function (req, file, cb) {
     checkFileType(file, cb);
-  }
+  },
 });
 
+// All product routes require valid authentication and an active, approved store
+router.use(protect);
+router.use(requireActiveStore);
+
+const canManageProducts = requireRole(
+  'store_admin',
+  'STORE_ADMIN',
+  'STORE_OWNER',
+  'inventory_manager',
+  'ADMIN'
+);
+
 router.route('/')
-  .get(protect, getProducts)
-  .post(protect, authorize('ADMIN'), createProduct);
+  .get(getProducts)
+  .post(canManageProducts, createProduct);
 
-router.post('/upload-image', protect, authorize('ADMIN'), upload.single('image'), uploadImage);
+router.post('/upload-image', canManageProducts, upload.single('image'), uploadImage);
 
-router.get('/categories/all', protect, getCategories);
-router.get('/barcode/:barcode', protect, getProductByBarcode);
+router.get('/categories/all', getCategories);
+router.get('/barcode/:barcode', getProductByBarcode);
 
 router.route('/:id')
-  .get(protect, getProductById)
-  .put(protect, authorize('ADMIN'), updateProduct)
-  .delete(protect, authorize('ADMIN'), deleteProduct);
+  .get(getProductById)
+  .put(canManageProducts, updateProduct)
+  .delete(canManageProducts, deleteProduct);
 
 module.exports = router;

@@ -204,30 +204,37 @@ const requireActiveStore = async (req, res, next) => {
   }
 
   // Check store status in MongoDB
-  const store = req.user.store;
+  let store = req.user.store;
+  if (store && !store.status && mongoose.connection.readyState === 1) {
+    try {
+      store = await Store.findById(store);
+    } catch (_) {}
+  }
+
   if (store && store.status) {
-    if (store.status === 'SUSPENDED') {
+    const statusUpper = store.status.toUpperCase();
+    if (statusUpper === 'SUSPENDED') {
       return res.status(403).json({
         success: false,
         code: 'STORE_SUSPENDED',
         message: 'Operational access is suspended for this supermarket. Please contact StoreFlow Platform Admin.',
       });
     }
-    if (store.status === 'PENDING') {
+    if (statusUpper === 'PENDING') {
       return res.status(403).json({
         success: false,
         code: 'STORE_PENDING',
         message: 'Your supermarket registration application is pending review and approval.',
       });
     }
-    if (store.status === 'REJECTED') {
+    if (statusUpper === 'REJECTED') {
       return res.status(403).json({
         success: false,
         code: 'STORE_REJECTED',
         message: 'Your supermarket registration application has been rejected.',
       });
     }
-    if (store.status !== 'ACTIVE') {
+    if (statusUpper !== 'ACTIVE') {
       return res.status(403).json({
         success: false,
         code: 'STORE_INACTIVE',

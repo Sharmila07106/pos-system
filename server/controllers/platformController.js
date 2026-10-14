@@ -222,7 +222,7 @@ const getStores = asyncHandler(async (req, res) => {
 const updateStoreStatus = asyncHandler(async (req, res) => {
   const { status, reason } = req.body;
 
-  const validStatuses = ['APPROVED', 'ACTIVE', 'SUSPENDED', 'REJECTED'];
+  const validStatuses = ['APPROVED', 'ACTIVE', 'SUSPENDED', 'REJECTED', 'PENDING'];
   if (!validStatuses.includes(status)) {
     res.status(400);
     throw new Error(`Status must be one of: ${validStatuses.join(', ')}`);
@@ -242,12 +242,24 @@ const updateStoreStatus = asyncHandler(async (req, res) => {
 
   await store.save();
 
+  if (normalizedStatus === 'ACTIVE' && store.ownerUser) {
+    await User.updateOne(
+      { _id: store.ownerUser },
+      { $set: { status: 'Active', isActive: true } }
+    ).catch(() => {});
+  }
+
   await AuditLog.create({
     store: store._id,
     actor: req.user?._id,
     actorName: req.user?.name || 'Platform Admin',
     actorRole: 'PLATFORM_ADMIN',
-    action: normalizedStatus === 'SUSPENDED' ? 'STORE_SUSPENDED' : 'STORE_ACTIVATED',
+    action:
+      normalizedStatus === 'SUSPENDED'
+        ? 'STORE_SUSPENDED'
+        : normalizedStatus === 'REJECTED'
+        ? 'STORE_REJECTED'
+        : 'STORE_ACTIVATED',
     entity: 'Store',
     entityId: store._id.toString(),
     details: { reason: reason || 'Platform policy review' },

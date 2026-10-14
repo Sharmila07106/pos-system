@@ -158,20 +158,34 @@ export default function PlatformAdmin() {
     }
   };
 
-  // Toggle Store Status (Suspend / Reactivate)
-  const handleToggleStoreStatus = async (store) => {
-    const isSuspended = store.status === 'SUSPENDED';
-    const nextStatus = isSuspended ? 'APPROVED' : 'SUSPENDED';
-    const confirmMsg = isSuspended 
-      ? `Reactivate supermarket "${store.name}"? Staff will regain POS access.`
-      : `Are you sure you want to SUSPEND "${store.name}"? All POS checkout and staff access will be locked immediately.`;
+  // Toggle / Update Store Status (Approve / Reject / Suspend / Reactivate)
+  const handleToggleStoreStatus = async (store, targetStatus = null) => {
+    let nextStatus = targetStatus;
+    if (!nextStatus) {
+      if (store.status === 'SUSPENDED') nextStatus = 'ACTIVE';
+      else if (store.status === 'ACTIVE' || store.status === 'APPROVED') nextStatus = 'SUSPENDED';
+      else if (store.status === 'PENDING') nextStatus = 'ACTIVE';
+      else nextStatus = 'ACTIVE';
+    }
+
+    const confirmMsg =
+      nextStatus === 'ACTIVE'
+        ? `Approve & activate supermarket "${store.name}"? Staff will be granted access.`
+        : nextStatus === 'REJECTED'
+        ? `Reject supermarket "${store.name}"? Access will be denied.`
+        : `Are you sure you want to SUSPEND "${store.name}"? All POS checkout and staff access will be locked immediately.`;
 
     if (!window.confirm(confirmMsg)) return;
 
     try {
       const res = await api.put(`/platform/stores/${store._id}/status`, {
         status: nextStatus,
-        reason: isSuspended ? 'Reactivated by Platform Admin' : 'Suspended for platform review'
+        reason:
+          nextStatus === 'ACTIVE'
+            ? 'Approved and activated by Platform Admin'
+            : nextStatus === 'REJECTED'
+            ? 'Registration rejected by Platform Admin'
+            : 'Suspended by Platform Admin for policy review',
       });
 
       if (res.data?.success) {
@@ -523,6 +537,14 @@ export default function PlatformAdmin() {
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FEE2E2] text-[#E5484D] border border-[#E5484D]/30">
                               <Power size={12} /> SUSPENDED
                             </span>
+                          ) : st.status === 'PENDING' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#D97706] border border-[#F59E0B]/30">
+                              <Clock size={12} /> PENDING
+                            </span>
+                          ) : st.status === 'REJECTED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FEE2E2] text-[#E5484D] border border-[#E5484D]/30">
+                              <XCircle size={12} /> REJECTED
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30">
                               <CheckCircle2 size={12} /> ACTIVE
@@ -530,16 +552,45 @@ export default function PlatformAdmin() {
                           )}
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => handleToggleStoreStatus(st)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                              st.status === 'SUSPENDED'
-                                ? 'bg-[#E2F6F3] text-[#0FA38F] border-[#0FA38F]/40 hover:bg-[#0FA38F]/10'
-                                : 'bg-[#FEE2E2] text-[#E5484D] border-[#E5484D]/40 hover:bg-[#E5484D]/10'
-                            }`}
-                          >
-                            {st.status === 'SUSPENDED' ? 'Reactivate Store' : 'Suspend Store'}
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {st.status === 'PENDING' ? (
+                              <>
+                                <button
+                                  onClick={() => handleToggleStoreStatus(st, 'ACTIVE')}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/40 hover:bg-[#0FA38F]/10 transition-all"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleToggleStoreStatus(st, 'REJECTED')}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FEE2E2] text-[#E5484D] border border-[#E5484D]/40 hover:bg-[#E5484D]/10 transition-all"
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : st.status === 'SUSPENDED' ? (
+                              <button
+                                onClick={() => handleToggleStoreStatus(st, 'ACTIVE')}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/40 hover:bg-[#0FA38F]/10 transition-all"
+                              >
+                                Reactivate
+                              </button>
+                            ) : st.status === 'REJECTED' ? (
+                              <button
+                                onClick={() => handleToggleStoreStatus(st, 'ACTIVE')}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/40 hover:bg-[#0FA38F]/10 transition-all"
+                              >
+                                Re-approve
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleStoreStatus(st, 'SUSPENDED')}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-[#FEE2E2] text-[#E5484D] border border-[#E5484D]/40 hover:bg-[#E5484D]/10 transition-all"
+                              >
+                                Suspend
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
