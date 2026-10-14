@@ -50,6 +50,13 @@ const Register = () => {
       userObj?.isPlatformAdmin
     ) {
       navigate('/platform-admin');
+    } else if (userObj?.role === 'STORE_OWNER' || (userObj?.role === 'ADMIN' && !userObj?.store)) {
+      if (!userObj?.store) {
+        toast.success(`Welcome to StoreFlow, ${userObj?.name || 'User'}! Please complete your supermarket registration.`);
+        navigate('/onboard');
+      } else {
+        navigate('/dashboard');
+      }
     } else if (userObj?.role === 'CASHIER') {
       navigate('/pos');
     } else {
@@ -343,7 +350,7 @@ const Register = () => {
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white px-3 text-[#8B96AB] font-bold tracking-wider">
-                Or continue with
+                OR
               </span>
             </div>
           </div>

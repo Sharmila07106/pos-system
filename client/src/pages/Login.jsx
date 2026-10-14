@@ -232,7 +232,7 @@ const Login = () => {
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-white px-3 text-[#8B96AB] font-bold tracking-wider">
-                Or continue with
+                OR
               </span>
             </div>
           </div>

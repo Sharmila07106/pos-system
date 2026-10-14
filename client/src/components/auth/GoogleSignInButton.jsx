@@ -51,20 +51,26 @@ export const GoogleSignInButton = ({
         },
       });
 
+      const googleBtnText = label.toLowerCase().includes('sign up')
+        ? 'signup_with'
+        : 'continue_with';
+      const containerWidth = buttonDivRef.current?.offsetWidth || 340;
+      const btnWidth = Math.min(400, Math.max(220, containerWidth));
+
       // Render official Google button into container
       buttonDivRef.current.innerHTML = '';
       window.google.accounts.id.renderButton(buttonDivRef.current, {
         theme: 'outline',
         size: 'large',
-        text: 'continue_with',
+        text: googleBtnText,
         shape: 'rectangular',
-        width: 340,
+        width: btnWidth,
         logo_alignment: 'center',
       });
     } catch (err) {
       console.warn('Failed to render official Google button:', err);
     }
-  }, [clientId, isGsiLoaded, onSuccess, onError]);
+  }, [clientId, isGsiLoaded, label, onSuccess, onError]);
 
   const handleClick = () => {
     if (!clientId) {
@@ -74,7 +80,11 @@ export const GoogleSignInButton = ({
 
     if (window.google && window.google.accounts && window.google.accounts.id) {
       try {
-        window.google.accounts.id.prompt();
+        window.google.accounts.id.prompt((notification) => {
+          if (notification && notification.isNotDisplayed && notification.isNotDisplayed()) {
+            console.warn('Google One Tap not displayed:', notification.getNotDisplayedReason?.());
+          }
+        });
       } catch (err) {
         console.warn('Google prompt failed:', err);
       }

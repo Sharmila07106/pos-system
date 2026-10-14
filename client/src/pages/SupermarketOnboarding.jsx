@@ -21,8 +21,10 @@ import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StoreFlowLogo } from '../components/brand/StoreFlowLogo';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const SupermarketOnboarding = () => {
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedApp, setSubmittedApp] = useState(null);
@@ -30,9 +32,9 @@ const SupermarketOnboarding = () => {
 
   // Form State
   const [formData, setFormData] = useState({
-    ownerName: '',
-    email: '',
-    phone: '',
+    ownerName: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
     businessName: '',
     storeType: 'Supermarket',
     storeSize: 'Medium (1000-3000 sq ft)',
@@ -42,6 +44,17 @@ const SupermarketOnboarding = () => {
     registrationNumber: '',
     notes: '',
   });
+
+  React.useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        ownerName: prev.ownerName || user.name || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || '',
+      }));
+    }
+  }, [user]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
