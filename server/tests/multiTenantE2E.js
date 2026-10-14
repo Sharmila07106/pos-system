@@ -31,7 +31,7 @@ const {
 const { activateStaff } = require('../controllers/authController');
 const { getProductById } = require('../controllers/productController');
 const { getDashboardStats } = require('../controllers/dashboardController');
-const { getSales, getSaleById, createSale, refundSale } = require('../controllers/salesController');
+const { getSales, getSaleById, createSale, refundSale, exportSalesCsv } = require('../controllers/salesController');
 
 const Store = require('../models/Store');
 const User = require('../models/User');
@@ -85,6 +85,10 @@ async function runMultiTenantTestSuite() {
       }
       json(payload) {
         this.data = payload;
+        return this;
+      }
+      send(payload) {
+        this.sentData = payload;
         return this;
       }
       _write(chunk, encoding, callback) {
@@ -1148,6 +1152,68 @@ async function runMultiTenantTestSuite() {
       User.findOne = origUserFindOne;
       Product.findOne = origProductFindOne;
       StockMovement.create = origStockMovementCreate;
+    }
+
+    // Sub-test 8.6: Export sales CSV formats rows and headers correctly
+    {
+      const mockSalesList = [
+        {
+          transactionId: 'TXN-00001',
+          receiptNo: 'TXN-00001',
+          createdAt: new Date('2026-10-14T10:00:00Z'),
+          cashierName: 'Ramesh Cashier',
+          items: [{ name: 'Rice 5kg', quantity: 1, price: 300 }],
+          subtotal: 300,
+          discount: 0,
+          tax: 15,
+          total: 315,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+        },
+      ];
+
+      const origSaleFind = Sale.find;
+      Sale.find = () => ({
+        sort: () => Promise.resolve(mockSalesList),
+      });
+
+      const { req, res } = mockReqRes(
+        {},
+        {},
+        {},
+        { _id: 'admin_1', role: 'STORE_ADMIN' },
+        mockStoreId
+      );
+
+      await exportSalesCsv(req, res);
+
+      assert(
+        res.statusCode === 200 &&
+          res.headers['Content-Type']?.includes('text/csv') &&
+          res.sentData?.includes('Transaction ID') &&
+          res.sentData?.includes('TXN-00001') &&
+          res.sentData?.includes('315.00'),
+        'Store admin can export sales history as CSV report with headers and totals'
+      );
+
+      // Sub-test 8.7: Inventory manager is forbidden from exporting sales CSV (403)
+      const { req: invReq, res: invRes } = mockReqRes(
+        {},
+        {},
+        {},
+        { _id: 'inv_1', role: 'INVENTORY_MANAGER' },
+        mockStoreId
+      );
+
+      await exportSalesCsv(invReq, invRes);
+
+      assert(
+        invRes.statusCode === 403 &&
+          invRes.data?.message?.includes('Inventory managers cannot export sales data'),
+        'Inventory Manager calling GET /api/sales/export.csv gets 403 Forbidden'
+      );
+
+      Sale.find = origSaleFind;
     }
   }
 

@@ -282,7 +282,7 @@ const getSales = asyncHandler(async (req, res) => {
     });
   }
 
-  const { search, page = 1, limit = 20, startDate, endDate, status } = req.query;
+  const { search, page = 1, limit = 20, startDate, endDate, status, paymentMethod } = req.query;
   const query = { store: storeId };
 
   // Cashier can only see their own transactions/bills
@@ -294,8 +294,16 @@ const getSales = asyncHandler(async (req, res) => {
     query.status = status;
   }
 
+  if (paymentMethod && paymentMethod !== 'ALL') {
+    query.paymentMethod = paymentMethod.toUpperCase();
+  }
+
   if (search && search.trim()) {
-    query.transactionId = { $regex: search.trim(), $options: 'i' };
+    query.$or = [
+      { transactionId: { $regex: search.trim(), $options: 'i' } },
+      { receiptNo: { $regex: search.trim(), $options: 'i' } },
+      { cashierName: { $regex: search.trim(), $options: 'i' } },
+    ];
   }
 
   if (startDate || endDate) {
@@ -319,12 +327,45 @@ const getSales = asyncHandler(async (req, res) => {
     .limit(limitNum)
     .populate('cashierUser', 'name email');
 
+  // Summary aggregates for filtered query
+  let summary = { totalRevenue: 0, totalBills: total, completedBills: 0, refundedBills: 0 };
+  try {
+    const summaryAgg = await Sale.aggregate([
+      { $match: query },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: {
+            $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, '$total', 0] },
+          },
+          completedBills: {
+            $sum: { $cond: [{ $eq: ['$status', 'COMPLETED'] }, 1, 0] },
+          },
+          refundedBills: {
+            $sum: { $cond: [{ $eq: ['$status', 'REFUNDED'] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+    if (summaryAgg && summaryAgg.length > 0) {
+      summary = {
+        totalRevenue: summaryAgg[0].totalRevenue || 0,
+        totalBills: total,
+        completedBills: summaryAgg[0].completedBills || 0,
+        refundedBills: summaryAgg[0].refundedBills || 0,
+      };
+    }
+  } catch (err) {
+    console.warn('Sales summary aggregate warning:', err.message);
+  }
+
   return res.json({
     success: true,
     count: sales.length,
     total,
     page: pageNum,
     pages: Math.ceil(total / limitNum) || 1,
+    summary,
     data: sales,
   });
 });
@@ -461,10 +502,109 @@ const refundSale = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Export filtered sales to CSV
+// @route   GET /api/sales/export.csv
+// @access  Private (Store Staff Only)
+const exportSalesCsv = asyncHandler(async (req, res) => {
+  const userRole = (req.user?.role || '').toLowerCase();
+  if (userRole === 'inventory_manager') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied: Inventory managers cannot export sales data.',
+    });
+  }
+
+  const storeId = req.storeId;
+  if (!storeId) {
+    return res.status(400).send('Store context required');
+  }
+
+  const { search, startDate, endDate, status, paymentMethod } = req.query;
+  const query = { store: storeId };
+
+  if (userRole === 'cashier' && req.user?._id) {
+    query.cashierUser = req.user._id;
+  }
+
+  if (status && status !== 'ALL') {
+    query.status = status;
+  }
+
+  if (paymentMethod && paymentMethod !== 'ALL') {
+    query.paymentMethod = paymentMethod.toUpperCase();
+  }
+
+  if (search && search.trim()) {
+    query.$or = [
+      { transactionId: { $regex: search.trim(), $options: 'i' } },
+      { receiptNo: { $regex: search.trim(), $options: 'i' } },
+      { cashierName: { $regex: search.trim(), $options: 'i' } },
+    ];
+  }
+
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) query.createdAt.$gte = new Date(startDate);
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      query.createdAt.$lte = end;
+    }
+  }
+
+  const sales = await Sale.find(query).sort({ createdAt: -1 });
+
+  const headers = [
+    'Transaction ID',
+    'Receipt No',
+    'Date',
+    'Time',
+    'Cashier',
+    'Items Count',
+    'Subtotal',
+    'Discount',
+    'Tax',
+    'Total',
+    'Payment Method',
+    'Status',
+  ];
+
+  const escapeCsv = (str) => {
+    if (str === null || str === undefined) return '""';
+    const s = String(str).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows = sales.map((s) => {
+    const d = new Date(s.createdAt);
+    return [
+      escapeCsv(s.transactionId),
+      escapeCsv(s.receiptNo || s.transactionId),
+      escapeCsv(d.toLocaleDateString('en-GB')),
+      escapeCsv(d.toLocaleTimeString()),
+      escapeCsv(s.cashierName || 'Cashier'),
+      s.items?.length || 0,
+      (s.subtotal || 0).toFixed(2),
+      (s.discount || 0).toFixed(2),
+      (s.tax || 0).toFixed(2),
+      (s.total || 0).toFixed(2),
+      escapeCsv(s.paymentMethod),
+      escapeCsv(s.status),
+    ].join(',');
+  });
+
+  const csvContent = [headers.join(','), ...rows].join('\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="storeflow-sales.csv"');
+  return res.status(200).send(csvContent);
+});
+
 module.exports = {
   createSale,
   getSales,
   getSaleById,
   refundSale,
+  exportSalesCsv,
   memorySales,
 };
