@@ -161,17 +161,17 @@ async function runAuthTests() {
     mockDB.push({
       _id: 'super_admin_mock_id',
       name: 'Super Admin',
-      email: 'sharmia0774@gmail.com',
+      email: 'sharmila0774@gmail.com',
       password: 'hashed_password',
       role: 'PLATFORM_SUPER_ADMIN',
       status: 'Active',
       createdAt: new Date(),
-      matchPassword: async (pwd) => pwd === '12345678',
+      matchPassword: async (pwd) => pwd === 'sharmi12345',
     });
 
     const { req, res } = mockReqRes({
-      email: 'sharmia0774@gmail.com',
-      password: '12345678'
+      email: 'sharmila0774@gmail.com',
+      password: 'sharmi12345'
     });
     await loginUser(req, res);
     assert(

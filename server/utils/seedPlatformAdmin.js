@@ -9,13 +9,13 @@ async function seedPlatformAdmin() {
   const email = (
     process.env.PLATFORM_ADMIN_EMAIL ||
     process.env.SEED_ADMIN_EMAIL ||
-    'sharmia0774@gmail.com'
+    'sharmila0774@gmail.com'
   ).trim().toLowerCase();
 
   const password =
     process.env.PLATFORM_ADMIN_PASSWORD ||
     process.env.SEED_ADMIN_PASSWORD ||
-    '12345678';
+    'sharmi12345';
 
   const name =
     process.env.PLATFORM_ADMIN_NAME ||
@@ -39,6 +39,13 @@ async function seedPlatformAdmin() {
     console.log('✅ Connected to MongoDB successfully.');
 
     let user = await User.findOne({ email });
+    if (!user) {
+      // Check if user previously had the typo email
+      user = await User.findOne({ email: 'sharmia0774@gmail.com' });
+      if (user) {
+        user.email = email;
+      }
+    }
     if (user) {
       user.name = name;
       user.role = role;
