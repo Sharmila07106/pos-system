@@ -9,7 +9,7 @@
     "seed:products": "node utils/seedProducts.js",
     "seed:admin": "node utils/seedPlatformAdmin.js",
     "start": "node server.js",
-    "seed": "node utils/seedPlatformAdmin.js"
+    "seed": "node seed/seedDemoData.js"
   },
   "keywords": [],
   "author": "",
