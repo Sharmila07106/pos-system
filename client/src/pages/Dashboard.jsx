@@ -4,8 +4,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingUp, Package, AlertTriangle, IndianRupee } from 'lucide-react';
 import GlassCard from '../components/ui/GlassCard';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
-const StatCard = ({ title, value, icon: Icon, color, delay }) => (
+const StatCard = ({ title, value, icon: Icon, color, delay, trend }) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -21,10 +22,11 @@ const StatCard = ({ title, value, icon: Icon, color, delay }) => (
           <Icon size={24} />
         </div>
       </div>
-      <div className="mt-4 flex items-center gap-2 text-sm">
-        <span className="text-emerald-500 font-medium flex items-center"><TrendingUp size={14} className="mr-1" /> +12%</span>
-        <span className="text-slate-500">vs last week</span>
-      </div>
+      {trend && (
+        <div className="mt-4 flex items-center gap-2 text-sm">
+          {trend}
+        </div>
+      )}
     </GlassCard>
   </motion.div>
 );
@@ -42,6 +44,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -88,7 +91,7 @@ const Dashboard = () => {
       >
         <div>
           <h1 className="text-3xl font-black text-text-color tracking-tight">Overview</h1>
-          <p className="text-slate-500 font-medium mt-1">Welcome back, Admin. Here's what's happening today.</p>
+          <p className="text-slate-500 font-medium mt-1">Welcome back, {user?.name || 'Admin'}. Here's what's happening today.</p>
         </div>
       </motion.div>
 
@@ -109,7 +112,7 @@ const Dashboard = () => {
         />
         <StatCard 
           title="Total Products" 
-          value="35" // Hardcoded for demo, normally from API
+          value={stats?.totalProducts ?? 0} 
           icon={Package} 
           color="#3b82f6" 
           delay={0.3} 

@@ -9,12 +9,18 @@ const Product = require('../models/Product');
 const getDashboardStats = asyncHandler(async (req, res) => {
   const storeId = req.storeId ? new mongoose.Types.ObjectId(req.storeId) : null;
 
-  if (!storeId && req.user.role !== 'PLATFORM_ADMIN') {
+  const isPlatformAdmin =
+    req.user?.role === 'PLATFORM_SUPER_ADMIN' ||
+    req.user?.role === 'PLATFORM_ADMIN' ||
+    req.user?.isPlatformAdmin;
+
+  if (!storeId && !isPlatformAdmin) {
     return res.json({
       success: true,
       data: {
         todayRevenue: 0,
         todaySalesCount: 0,
+        totalProducts: 0,
         lowStockCount: 0,
         chartData: [],
       },
@@ -37,7 +43,11 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   const revenue = todaySales.length > 0 ? todaySales[0].revenue : 0;
   const salesCount = todaySales.length > 0 ? todaySales[0].count : 0;
 
-  // 2. Low Stock Products Count
+  // 2. Total Products Count & Low Stock Count
+  const totalProductsMatch = { isActive: true };
+  if (storeId) totalProductsMatch.store = storeId;
+  const totalProducts = await Product.countDocuments(totalProductsMatch);
+
   const productMatch = {
     $expr: { $lte: ['$stock', '$lowStockThreshold'] },
     isActive: true,
@@ -75,6 +85,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     data: {
       todayRevenue: revenue,
       todaySalesCount: salesCount,
+      totalProducts,
       lowStockCount: lowStockProducts,
       chartData,
     },
