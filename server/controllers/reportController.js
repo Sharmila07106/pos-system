@@ -41,10 +41,14 @@ const getPlatformSummaryReport = async (req, res) => {
       Complaint.find(),
     ]);
 
-    const activeStores = stores.filter((s) => s.status === 'ACTIVE').length;
-    const pendingStores = stores.filter((s) => s.status === 'PENDING').length;
-    const suspendedStores = stores.filter((s) => s.status === 'SUSPENDED').length;
-    const rejectedStores = stores.filter((s) => s.status === 'REJECTED').length;
+    const storeList = Array.isArray(stores) ? stores : [];
+    const userList = Array.isArray(users) ? users : [];
+    const compList = Array.isArray(complaints) ? complaints : [];
+
+    const activeStores = storeList.filter((s) => s.status === 'ACTIVE').length;
+    const pendingStores = storeList.filter((s) => s.status === 'PENDING').length;
+    const suspendedStores = storeList.filter((s) => s.status === 'SUSPENDED').length;
+    const rejectedStores = storeList.filter((s) => s.status === 'REJECTED').length;
 
     const doc = new PDFDocument({ margin: 40, size: 'A4' });
 
@@ -61,10 +65,10 @@ const getPlatformSummaryReport = async (req, res) => {
     const gap = 12;
 
     const cards = [
-      { label: 'Total Supermarkets', value: stores.length.toString(), color: '#3B82F6' },
+      { label: 'Total Supermarkets', value: storeList.length.toString(), color: '#3B82F6' },
       { label: 'Active Supermarkets', value: activeStores.toString(), color: '#10B981' },
       { label: 'Pending Approvals', value: pendingStores.toString(), color: '#F59E0B' },
-      { label: 'Total Staff Users', value: users.length.toString(), color: '#8B5CF6' },
+      { label: 'Total Staff Users', value: userList.length.toString(), color: '#8B5CF6' },
     ];
 
     cards.forEach((c, idx) => {

@@ -214,12 +214,20 @@ const registerStore = async (req, res) => {
 // @access  Public
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password } = req.body || {};
 
-    if (!name || typeof name !== 'string' || name.trim().length < 2) {
+    if (!name || typeof name !== 'string') {
       return res.status(400).json({
         success: false,
-        message: 'Name is required (minimum 2 characters)',
+        message: 'Name is required',
+      });
+    }
+
+    const trimmedName = name.trim();
+    if (trimmedName.length < 2 || trimmedName.length > 60) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name must be between 2 and 60 characters',
       });
     }
 
@@ -306,11 +314,11 @@ const registerUser = async (req, res) => {
 // @route   POST /api/auth/login
 // @access  Public
 const loginUser = async (req, res) => {
-  const clientIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-  const clientUserAgent = req.headers['user-agent'] || '';
+  const clientIp = req.ip || req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '';
+  const clientUserAgent = req.headers?.['user-agent'] || '';
 
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({
@@ -321,8 +329,12 @@ const loginUser = async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // Query user in MongoDB
-    const user = await User.findOne({ email: cleanEmail }).populate('store');
+    // Query user in MongoDB (safe populate check for mock testing)
+    let userQuery = User.findOne({ email: cleanEmail });
+    if (userQuery && typeof userQuery.populate === 'function') {
+      userQuery = userQuery.populate('store');
+    }
+    const user = await userQuery;
 
     if (!user) {
       // Record failed login audit event
@@ -380,7 +392,9 @@ const loginUser = async (req, res) => {
 
     // Update lastLoginAt
     user.lastLoginAt = new Date();
-    await user.save();
+    if (typeof user.save === 'function') {
+      await user.save();
+    }
 
     const token = generateToken(user._id);
 
