@@ -10,17 +10,18 @@ const productSchema = new mongoose.Schema(
     barcode: {
       type: String,
       required: [true, 'Barcode is required'],
-      unique: true,
-      index: true,
       trim: true,
+      index: true,
     },
     category: {
       type: String,
       required: [true, 'Category is required'],
+      trim: true,
     },
     store: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Store',
+      required: [true, 'Store reference is required'],
       index: true,
     },
     sku: {
@@ -47,6 +48,7 @@ const productSchema = new mongoose.Schema(
     lowStockThreshold: {
       type: Number,
       default: 5,
+      min: 0,
     },
     image: {
       type: String,
@@ -55,11 +57,15 @@ const productSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+      index: true,
     },
   },
   {
     timestamps: true,
   }
 );
+
+// Compound index so barcode is unique PER supermarket store
+productSchema.index({ store: 1, barcode: 1 }, { unique: true });
 
 module.exports = mongoose.model('Product', productSchema);
