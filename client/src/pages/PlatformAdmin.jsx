@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
   Building2,
@@ -29,11 +29,39 @@ import { Card } from '../components/ui/Card';
 import { StoreFlowLogo } from '../components/brand/StoreFlowLogo';
 
 export default function PlatformAdmin() {
-  const { user, token } = useAuth();
+  const navigate = useNavigate();
+  const { user, token, logout, loading: authLoading } = useAuth();
 
   const [activeTab, setActiveTab] = useState('applications'); // 'applications' | 'stores' | 'health'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Authentication & Role Route Guard
+  useEffect(() => {
+    if (!authLoading) {
+      if (!token || !user) {
+        toast.error('Please sign in to access Platform Admin');
+        navigate('/login', { replace: true });
+        return;
+      }
+      const isPlatformAdmin =
+        user.role === 'PLATFORM_SUPER_ADMIN' ||
+        user.role === 'PLATFORM_ADMIN' ||
+        user.isPlatformAdmin === true;
+
+      if (!isPlatformAdmin) {
+        toast.error('Access restricted to Platform Administrators');
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    }
+  }, [authLoading, token, user, navigate]);
+
+  const handleLogout = () => {
+    logout();
+    toast.success('Signed out of Platform Admin');
+    navigate('/login');
+  };
 
   // Data states
   const [stats, setStats] = useState({
@@ -80,15 +108,21 @@ export default function PlatformAdmin() {
       }
     } catch (err) {
       console.error('Failed to load platform admin data:', err);
-      toast.error('Failed to load platform data. Please check connection.');
+      if (err.response?.status === 503 || err.response?.data?.code === 'DB_NOT_CONNECTED') {
+        toast.error('Database connection offline. Please check MONGODB_URI.');
+      } else {
+        toast.error('Failed to load platform data. Please check connection.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadPlatformData();
-  }, []);
+    if (token) {
+      loadPlatformData();
+    }
+  }, [token]);
 
   // Review Application
   const handleReviewSubmit = async (e) => {
@@ -201,6 +235,15 @@ export default function PlatformAdmin() {
           </div>
 
           <div className="flex items-center gap-3">
+            {user && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-xl bg-white/5 border border-white/10 text-xs text-white/80">
+                <span className="w-2 h-2 rounded-full bg-[#0FA38F]" />
+                <span className="font-semibold">{user.email}</span>
+                <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-[#0FA38F]/20 text-[#0FA38F]">
+                  {user.role}
+                </span>
+              </div>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -216,6 +259,16 @@ export default function PlatformAdmin() {
                 POS Dashboard <ArrowRight size={14} />
               </Button>
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="border-white/20 text-white hover:bg-[#E5484D]/20 hover:border-[#E5484D] hover:text-[#E5484D] transition-colors"
+              title="Sign out of Platform Admin"
+            >
+              <Power size={14} className="text-[#E5484D]" />
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
           </div>
         </div>
       </header>
