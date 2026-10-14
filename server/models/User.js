@@ -26,26 +26,66 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['PLATFORM_ADMIN', 'STORE_OWNER', 'ADMIN', 'INVENTORY_MANAGER', 'CASHIER'],
+      enum: ['PLATFORM_ADMIN', 'STORE_OWNER', 'INVENTORY_MANAGER', 'CASHIER', 'ADMIN'],
       default: 'CASHIER',
+      index: true,
     },
     store: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Store',
+      default: null,
       index: true,
     },
     isPlatformAdmin: {
       type: Boolean,
       default: false,
     },
-    phone: {
-      type: String,
-      default: '',
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
     },
     status: {
       type: String,
       enum: ['Active', 'Disabled'],
       default: 'Active',
+    },
+    phone: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+    lastActiveAt: {
+      type: Date,
+      default: null,
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
+    preferences: {
+      themeAccent: {
+        type: String,
+        default: '#0FA38F',
+      },
+      sidebarStyle: {
+        type: String,
+        enum: ['NAVY', 'CHARCOAL', 'LIGHT'],
+        default: 'NAVY',
+      },
+      density: {
+        type: String,
+        enum: ['COMFORTABLE', 'COMPACT'],
+        default: 'COMFORTABLE',
+      },
+      fontScale: {
+        type: String,
+        default: '100%',
+      },
     },
   },
   {
@@ -55,11 +95,16 @@ const userSchema = new mongoose.Schema(
 
 // Hash password before saving
 userSchema.pre('save', async function () {
-  if (!this.isModified('password')) {
-    return;
+  if (this.isModified('password')) {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
   }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  // Sync isActive and status
+  if (this.isModified('status')) {
+    this.isActive = this.status === 'Active';
+  } else if (this.isModified('isActive')) {
+    this.status = this.isActive ? 'Active' : 'Disabled';
+  }
 });
 
 // Compare entered password with hashed password in database
