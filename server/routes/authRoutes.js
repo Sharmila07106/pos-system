@@ -5,6 +5,7 @@ const {
   registerStore,
   registerUser,
   loginUser,
+  googleAuth,
   logoutUser,
   getMe,
   getPreferences,
@@ -29,6 +30,7 @@ const authLimiter = rateLimit({
 router.post('/register-store', authLimiter, registerStore);
 router.post('/register', authLimiter, registerUser);
 router.post('/login', authLimiter, loginUser);
+router.post('/google', authLimiter, googleAuth);
 router.post('/logout', protect, logoutUser);
 router.get('/invitation/:token', getInvitationDetails);
 router.post('/activate-staff', activateStaff);

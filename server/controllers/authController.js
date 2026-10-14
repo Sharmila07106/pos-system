@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Store = require('../models/Store');
@@ -407,7 +408,10 @@ const loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        isPlatformAdmin: user.role === 'PLATFORM_ADMIN' || user.isPlatformAdmin === true,
+        isPlatformAdmin:
+          user.role === 'PLATFORM_SUPER_ADMIN' ||
+          user.role === 'PLATFORM_ADMIN' ||
+          user.isPlatformAdmin === true,
         store: user.store || null,
         status: user.status,
         preferences: user.preferences,
@@ -420,6 +424,165 @@ const loginUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || 'Server error during login',
+    });
+  }
+};
+
+// @desc    Authenticate with Google OAuth ID token
+// @route   POST /api/auth/google
+// @access  Public
+const googleAuth = async (req, res) => {
+  const clientIp = req.ip || req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '';
+  const clientUserAgent = req.headers?.['user-agent'] || '';
+
+  try {
+    const { credential } = req.body || {};
+
+    if (!credential) {
+      return res.status(400).json({
+        success: false,
+        message: 'Google credential ID token is required',
+      });
+    }
+
+    // Verify token with Google's official tokeninfo endpoint
+    let googlePayload = null;
+    try {
+      const response = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
+      );
+      if (!response.ok) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid or expired Google credential',
+        });
+      }
+      googlePayload = await response.json();
+    } catch (fetchErr) {
+      console.error('Google token verification network error:', fetchErr.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to verify Google credential with Google authentication servers',
+      });
+    }
+
+    if (!googlePayload || !googlePayload.email) {
+      return res.status(401).json({
+        success: false,
+        message: 'Google account information could not be verified',
+      });
+    }
+
+    const cleanEmail = googlePayload.email.trim().toLowerCase();
+    const adminAllowlist = [
+      (process.env.PLATFORM_ADMIN_EMAIL || '').trim().toLowerCase(),
+      (process.env.SEED_ADMIN_EMAIL || '').trim().toLowerCase(),
+      'sharmia0774@gmail.com',
+      'sharmila0774@gmail.com',
+    ].filter(Boolean);
+
+    let userQuery = User.findOne({ email: cleanEmail });
+    if (userQuery && typeof userQuery.populate === 'function') {
+      userQuery = userQuery.populate('store');
+    }
+    let user = await userQuery;
+
+    if (user) {
+      // Existing user: Link Google ID if not linked
+      if (!user.googleId) {
+        user.googleId = googlePayload.sub;
+        if (user.authProvider === 'LOCAL') {
+          user.authProvider = 'GOOGLE';
+        }
+      }
+
+      // If user has platform super admin privileges, verify their email is explicitly allowlisted
+      const isSuperAdminRole =
+        user.role === 'PLATFORM_SUPER_ADMIN' ||
+        user.role === 'PLATFORM_ADMIN' ||
+        user.isPlatformAdmin;
+
+      if (isSuperAdminRole && !adminAllowlist.includes(cleanEmail)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Platform administrator Google account email is not in the verified allowlist.',
+        });
+      }
+
+      user.lastLoginAt = new Date();
+      if (typeof user.save === 'function') {
+        await user.save();
+      }
+    } else {
+      // New user registration via Google
+      const isConfiguredAdmin = adminAllowlist.includes(cleanEmail);
+      const userCount = await User.countDocuments();
+
+      let assignedRole = 'CASHIER';
+      let isPlatformAdmin = false;
+
+      if (isConfiguredAdmin) {
+        assignedRole = 'PLATFORM_SUPER_ADMIN';
+        isPlatformAdmin = true;
+      } else if (userCount === 0) {
+        assignedRole = 'ADMIN';
+      }
+
+      // Generate random high-entropy password for OAuth user
+      const randPassword = crypto.randomBytes(16).toString('hex') + 'A1!';
+
+      user = await User.create({
+        name: googlePayload.name || 'Google User',
+        email: cleanEmail,
+        password: randPassword,
+        role: assignedRole,
+        isPlatformAdmin,
+        authProvider: 'GOOGLE',
+        googleId: googlePayload.sub,
+        status: 'Active',
+        isActive: true,
+        lastLoginAt: new Date(),
+      });
+    }
+
+    // Record login event
+    await LoginEvent.create({
+      user: user._id,
+      store: user.store?._id || user.store || null,
+      role: user.role,
+      type: 'LOGIN',
+      ip: clientIp,
+      userAgent: clientUserAgent,
+      metadata: { provider: 'GOOGLE', googleSub: googlePayload.sub },
+    }).catch(() => {});
+
+    const token = generateToken(user._id);
+
+    return res.json({
+      success: true,
+      message: 'Signed in with Google successfully',
+      token,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isPlatformAdmin:
+          user.role === 'PLATFORM_SUPER_ADMIN' ||
+          user.role === 'PLATFORM_ADMIN' ||
+          user.isPlatformAdmin === true,
+        store: user.store || null,
+        status: user.status,
+        preferences: user.preferences,
+        mustChangePassword: user.mustChangePassword,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error('googleAuth error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Server error during Google authentication',
     });
   }
 };
@@ -694,6 +857,7 @@ module.exports = {
   registerStore,
   registerUser,
   loginUser,
+  googleAuth,
   logoutUser,
   getMe,
   getPreferences,
