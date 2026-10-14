@@ -92,9 +92,11 @@ export default function ActivateStaff() {
         // Set user session in context & storage
         setSession(res.data.token, res.data.data, true);
         
-        // Direct to POS or Dashboard depending on role
-        if (res.data.data.role === 'CASHIER') {
+        const role = (res.data.data?.role || '').toLowerCase();
+        if (role === 'cashier') {
           navigate('/pos');
+        } else if (role === 'inventory_manager') {
+          navigate('/inventory');
         } else {
           navigate('/dashboard');
         }

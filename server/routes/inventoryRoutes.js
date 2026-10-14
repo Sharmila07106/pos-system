@@ -13,10 +13,22 @@ const {
 const {
   protect,
   requireActiveStore,
+  requireRole,
 } = require('../middleware/authMiddleware');
 
 router.use(protect);
 router.use(requireActiveStore);
+
+const canManageInventory = requireRole(
+  'store_admin',
+  'STORE_ADMIN',
+  'STORE_OWNER',
+  'ADMIN',
+  'inventory_manager',
+  'INVENTORY_MANAGER'
+);
+
+router.use(canManageInventory);
 
 // Movements & adjustments
 router.route('/movements').get(getStockMovements);

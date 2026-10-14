@@ -19,6 +19,8 @@ import ApplicationStatus from './pages/ApplicationStatus';
 import ActivateStaff from './pages/ActivateStaff';
 import PlatformAdmin from './pages/PlatformAdmin';
 
+import RoleRoute from './components/auth/RoleRoute';
+
 function App() {
   return (
     <AuthProvider>
@@ -54,7 +56,10 @@ function App() {
           <Route path="/onboard" element={<SupermarketOnboarding />} />
           <Route path="/application-status" element={<ApplicationStatus />} />
           <Route path="/activate-staff" element={<ActivateStaff />} />
-          <Route path="/platform-admin" element={<PlatformAdmin />} />
+          
+          <Route element={<RoleRoute allowedRoles={['platform_super_admin', 'platform_admin']} />}>
+            <Route path="/platform-admin" element={<PlatformAdmin />} />
+          </Route>
           
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />
@@ -63,13 +68,32 @@ function App() {
           </Route>
           
           <Route path="/" element={<MainLayout />}>
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="pos" element={<POS />} />
-            <Route path="products" element={<Products />} />
-            <Route path="inventory" element={<Inventory />} />
-            <Route path="sales" element={<SalesHistory />} />
-            <Route path="users" element={<Users />} />
-            <Route path="profile" element={<Profile />} />
+            {/* Store Admin Only */}
+            <Route element={<RoleRoute allowedRoles={['store_admin', 'store_owner', 'admin']} />}>
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="users" element={<Users />} />
+            </Route>
+
+            {/* Cashier Only */}
+            <Route element={<RoleRoute allowedRoles={['cashier']} />}>
+              <Route path="pos" element={<POS />} />
+            </Route>
+
+            {/* Store Admin & Inventory Manager */}
+            <Route element={<RoleRoute allowedRoles={['store_admin', 'store_owner', 'admin', 'inventory_manager']} />}>
+              <Route path="products" element={<Products />} />
+              <Route path="inventory" element={<Inventory />} />
+            </Route>
+
+            {/* Store Admin & Cashier */}
+            <Route element={<RoleRoute allowedRoles={['store_admin', 'store_owner', 'admin', 'cashier']} />}>
+              <Route path="sales" element={<SalesHistory />} />
+            </Route>
+
+            {/* All Staff */}
+            <Route element={<RoleRoute allowedRoles={['store_admin', 'store_owner', 'admin', 'inventory_manager', 'cashier']} />}>
+              <Route path="profile" element={<Profile />} />
+            </Route>
           </Route>
           
           <Route path="*" element={<NotFound />} />

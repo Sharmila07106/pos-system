@@ -23,14 +23,17 @@ const Login = () => {
   const { login, loginWithGoogle } = useAuth();
 
   const navigateByRole = (userObj) => {
+    const role = (userObj?.role || '').toLowerCase();
     if (
-      userObj?.role === 'PLATFORM_SUPER_ADMIN' ||
-      userObj?.role === 'PLATFORM_ADMIN' ||
+      role === 'platform_super_admin' ||
+      role === 'platform_admin' ||
       userObj?.isPlatformAdmin
     ) {
       navigate('/platform-admin');
-    } else if (userObj?.role === 'CASHIER') {
+    } else if (role === 'cashier') {
       navigate('/pos');
+    } else if (role === 'inventory_manager') {
+      navigate('/inventory');
     } else {
       navigate('/dashboard');
     }

@@ -17,7 +17,11 @@ const {
   getStaffAccessReport,
   getComplaintsReport,
 } = require('../controllers/reportController');
-const { requireActiveStore, forbidPlatformAdmin } = require('../middleware/authMiddleware');
+const {
+  requireActiveStore,
+  forbidPlatformAdmin,
+  requireRole,
+} = require('../middleware/authMiddleware');
 const {
   inviteStaff,
   getStaffLimits,
@@ -25,10 +29,14 @@ const {
   revokeInvitation,
 } = require('../controllers/userController');
 const { activateStaff } = require('../controllers/authController');
+const { getProductById } = require('../controllers/productController');
+const { getDashboardStats } = require('../controllers/dashboardController');
+const { getSales, getSaleById } = require('../controllers/salesController');
 
 const Store = require('../models/Store');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const Sale = require('../models/Sale');
 const Complaint = require('../models/Complaint');
 const Settings = require('../models/Settings');
 const ActivityLog = require('../models/ActivityLog');
@@ -776,6 +784,140 @@ async function runMultiTenantTestSuite() {
     Invitation.findOne = origInviteFindOne;
     Invitation.findById = origInviteFindById;
     Invitation.create = origInviteCreate;
+  }
+
+  // TEST 9: Role Boundaries & Cross-Tenant Isolation Negative Tests
+  console.log('\n--- SUITE 7: Role Permissions & Cross-Tenant Isolation Negative Tests ---');
+  {
+    // Sub-test 7.1: Cashier calling POST /api/products directly gets 403
+    {
+      const canManageProducts = requireRole(
+        'store_admin',
+        'STORE_ADMIN',
+        'STORE_OWNER',
+        'inventory_manager',
+        'ADMIN'
+      );
+      const { req, res } = mockReqRes(
+        { name: 'Illegal Cashier Product', price: 100 },
+        {},
+        {},
+        { _id: 'cashier_user_1', role: 'CASHIER' },
+        'store_test_id'
+      );
+      let nextCalled = false;
+      canManageProducts(req, res, () => {
+        nextCalled = true;
+      });
+      assert(
+        res.statusCode === 403 && !nextCalled,
+        'Negative Test: Cashier calling POST /api/products directly gets 403 Forbidden'
+      );
+    }
+
+    // Sub-test 7.2: Cashier calling GET /api/dashboard/stats gets 403
+    {
+      const { req, res } = mockReqRes(
+        {},
+        {},
+        {},
+        { _id: 'cashier_user_1', role: 'CASHIER' },
+        'store_test_id'
+      );
+      await getDashboardStats(req, res);
+      assert(
+        res.statusCode === 403 && res.data?.message?.includes('Cashiers cannot view store revenue'),
+        'Negative Test: Cashier calling GET /api/dashboard/stats gets 403 Forbidden'
+      );
+    }
+
+    // Sub-test 7.3: Inventory Manager calling GET /api/sales gets 403
+    {
+      const { req, res } = mockReqRes(
+        {},
+        {},
+        {},
+        { _id: 'inv_user_1', role: 'INVENTORY_MANAGER' },
+        'store_test_id'
+      );
+      await getSales(req, res);
+      assert(
+        res.statusCode === 403 && res.data?.message?.includes('Inventory managers cannot access sales history'),
+        'Negative Test: Inventory Manager calling GET /api/sales gets 403 Forbidden'
+      );
+    }
+
+    // Sub-test 7.4: Cross-tenant isolation - Store A admin cannot read Store B product data
+    {
+      const origProductFindById = Product.findById;
+      Product.findById = async (id) => ({
+        _id: id,
+        name: 'Confidential Store B Product',
+        store: 'store_tenant_B',
+      });
+
+      const { req, res } = mockReqRes(
+        {},
+        {},
+        { id: 'prod_store_B' },
+        { _id: 'admin_store_A', role: 'STORE_ADMIN' },
+        'store_tenant_A'
+      );
+
+      let threw403 = false;
+      try {
+        await getProductById(req, res);
+      } catch (err) {
+        if (res.statusCode === 403 || err.message?.includes('from another store')) {
+          threw403 = true;
+        }
+      }
+
+      assert(
+        threw403 || res.statusCode === 403,
+        'Negative Test: Store A admin cannot read Store B product data (403 Forbidden)'
+      );
+
+      Product.findById = origProductFindById;
+    }
+
+    // Sub-test 7.5: Cross-tenant isolation - Store A admin cannot read Store B sales receipt
+    {
+      const origSaleFindById = Sale.findById;
+      Sale.findById = () => ({
+        populate: () => ({
+          populate: async () => ({
+            _id: 'sale_store_B',
+            transactionId: 'TXN-99999',
+            store: 'store_tenant_B',
+          }),
+        }),
+      });
+
+      const { req, res } = mockReqRes(
+        {},
+        {},
+        { id: 'sale_store_B' },
+        { _id: 'admin_store_A', role: 'STORE_ADMIN' },
+        'store_tenant_A'
+      );
+
+      let threwSale403 = false;
+      try {
+        await getSaleById(req, res);
+      } catch (err) {
+        if (res.statusCode === 403 || err.message?.includes('from another store')) {
+          threwSale403 = true;
+        }
+      }
+
+      assert(
+        threwSale403 || res.statusCode === 403,
+        'Negative Test: Store A admin cannot read Store B sales receipt (403 Forbidden)'
+      );
+
+      Sale.findById = origSaleFindById;
+    }
   }
 
   console.log('\n====================================================');

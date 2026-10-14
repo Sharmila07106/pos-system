@@ -183,8 +183,21 @@ const getSales = asyncHandler(async (req, res) => {
     return res.json({ success: true, count: 0, total: 0, data: [] });
   }
 
+  const userRole = (req.user?.role || '').toLowerCase();
+  if (userRole === 'inventory_manager') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied: Inventory managers cannot access sales history or revenue data.',
+    });
+  }
+
   const { search, page = 1, limit = 20, startDate, endDate, status } = req.query;
   const query = { store: storeId };
+
+  // Cashier can only see their own transactions/bills
+  if (userRole === 'cashier' && req.user?._id) {
+    query.cashierUser = req.user._id;
+  }
 
   if (status && status !== 'ALL') {
     query.status = status;
@@ -257,6 +270,18 @@ const getSaleById = asyncHandler(async (req, res) => {
 // @route   POST /api/sales/:id/refund
 // @access  Private (Store Owner / Admin Only)
 const refundSale = asyncHandler(async (req, res) => {
+  const userRole = (req.user?.role || '').toLowerCase();
+  const isStoreAdmin =
+    ['store_admin', 'store_owner', 'admin'].includes(userRole) ||
+    req.user?.isPlatformAdmin;
+
+  if (!isStoreAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied: Voiding or refunding a bill requires store admin privileges or approval.',
+    });
+  }
+
   const storeId = req.storeId;
   const sale = await Sale.findById(req.params.id);
 

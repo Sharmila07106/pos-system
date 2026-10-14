@@ -50,24 +50,82 @@ const MainLayout = () => {
     navigate('/login');
   };
 
-  const allNavItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER'] },
-    { path: '/pos', label: 'POS Checkout', icon: ShoppingCart, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER'] },
-    { path: '/products', label: 'Products', icon: Package, roles: ['ADMIN', 'STORE_OWNER'] },
-    { path: '/inventory', label: 'Inventory', icon: Boxes, roles: ['ADMIN', 'STORE_OWNER', 'INVENTORY_MANAGER'] },
-    { path: '/sales', label: 'Sales History', icon: History, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER'] },
-    { path: '/users', label: 'Staff & Roles', icon: Users, roles: ['ADMIN', 'STORE_OWNER'] },
-    { path: '/profile', label: 'Profile', icon: User, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER', 'INVENTORY_MANAGER'] },
-    { path: '/platform-admin', label: 'Platform Admin', icon: ShieldCheck, roles: ['ADMIN', 'PLATFORM_ADMIN'] },
-  ];
+  const normalizedRole = (user.role || '').toLowerCase();
+  const isPlatformAdmin =
+    normalizedRole === 'platform_super_admin' ||
+    normalizedRole === 'platform_admin' ||
+    user.isPlatformAdmin === true;
 
-  const userRole = user.role || 'ADMIN';
-  const navItems = allNavItems.filter(item => 
-    item.roles.includes(userRole) || (user.isPlatformAdmin && item.roles.includes('PLATFORM_ADMIN'))
-  );
+  let navItems = [];
+  if (isPlatformAdmin) {
+    navItems = [
+      { path: '/platform-admin', label: 'Platform Requests', icon: ShieldCheck },
+    ];
+  } else if (normalizedRole === 'cashier') {
+    navItems = [
+      { path: '/pos', label: 'POS Checkout', icon: ShoppingCart },
+      { path: '/sales', label: 'My Bills Today', icon: History },
+      { path: '/profile', label: 'Profile', icon: User },
+    ];
+  } else if (normalizedRole === 'inventory_manager') {
+    navItems = [
+      { path: '/inventory', label: 'Inventory & Stock', icon: Boxes },
+      { path: '/products', label: 'Product Catalogue', icon: Package },
+      { path: '/profile', label: 'Profile', icon: User },
+    ];
+  } else {
+    // store_admin / store_owner / admin
+    navItems = [
+      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/products', label: 'Product Catalogue', icon: Package },
+      { path: '/inventory', label: 'Inventory & Stock', icon: Boxes },
+      { path: '/sales', label: 'Sales & Reports', icon: History },
+      { path: '/users', label: 'Staff Management', icon: Users },
+      { path: '/profile', label: 'Profile', icon: User },
+    ];
+  }
+
+  const getRoleBadge = (role) => {
+    const r = (role || '').toLowerCase();
+    switch (r) {
+      case 'store_admin':
+      case 'store_owner':
+      case 'admin':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30 uppercase tracking-wider">
+            Store Admin
+          </span>
+        );
+      case 'inventory_manager':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#EDE9FE] text-[#7C3AED] border border-[#7C3AED]/30 uppercase tracking-wider">
+            Inventory Manager
+          </span>
+        );
+      case 'cashier':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#E0F2FE] text-[#0284C7] border border-[#0284C7]/30 uppercase tracking-wider">
+            Cashier
+          </span>
+        );
+      case 'platform_super_admin':
+      case 'platform_admin':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-100 text-purple-700 border border-purple-300 uppercase tracking-wider">
+            Platform Super Admin
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 uppercase tracking-wider">
+            {role || 'Staff'}
+          </span>
+        );
+    }
+  };
 
   // Determine current page title
-  const currentNav = allNavItems.find(item => item.path === location.pathname);
+  const currentNav = navItems.find((item) => item.path === location.pathname);
   const pageTitle = currentNav ? currentNav.label : 'StoreFlow';
 
   return (
@@ -168,41 +226,59 @@ const MainLayout = () => {
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#F4F7FB]">
         
         {/* Top Bar: White (#FFFFFF, 72px) */}
-        <header className="h-[72px] bg-white border-b border-[#E3E8F0] shadow-[0_1px_2px_rgba(11,27,58,0.04)] flex items-center justify-between px-8 z-20">
+        <header className="h-[72px] bg-white border-b border-[#E3E8F0] shadow-[0_1px_2px_rgba(11,27,58,0.04)] flex items-center justify-between px-6 sm:px-8 z-20">
           {/* Page title & Breadcrumb */}
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-[#8B96AB] uppercase tracking-wider">StoreFlow</span>
             <ChevronRight size={14} className="text-[#8B96AB]" />
-            <h1 className="text-xl font-extrabold text-[#0B1B3A] tracking-tight">{pageTitle}</h1>
+            <h1 className="text-lg sm:text-xl font-extrabold text-[#0B1B3A] tracking-tight">{pageTitle}</h1>
           </div>
 
           {/* Right Header Area */}
-          <div className="flex items-center gap-5">
-            {/* Store Name & Tenant Chip */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#EEF2F8] border border-[#E3E8F0] rounded-[10px] text-xs font-bold text-[#0B1B3A]">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {/* Supermarket Name from Store Record */}
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-[#EEF2F8] border border-[#E3E8F0] rounded-[10px] text-xs font-bold text-[#0B1B3A]">
               <Store size={14} className="text-[#0FA38F]" strokeWidth={1.75} />
-              <span>{user.store?.name || storeName || 'FreshMart Supermarket'}</span>
-              <span className="w-2 h-2 rounded-full bg-[#0FA38F] animate-pulse" title="Tenant Active & Isolated" />
+              <span className="truncate max-w-[180px]">
+                {isPlatformAdmin ? 'StoreFlow Platform' : (user.store?.name || storeName || 'FreshMart Supermarket')}
+              </span>
+              <span className="w-2 h-2 rounded-full bg-[#0FA38F] animate-pulse" title="Store Online" />
             </div>
 
-            {/* Live Date / Time */}
-            <div className="hidden lg:block text-right">
-              <div className="text-xs font-bold text-[#0B1B3A] tabular-nums">
-                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            {/* Active Till / Register (if Cashier) */}
+            {normalizedRole === 'cashier' && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold text-amber-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Till #01 (Active)</span>
               </div>
-              <div className="text-[11px] font-semibold text-[#8B96AB]">
-                {currentTime.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
-              </div>
+            )}
+
+            {/* User Name & Role Pill */}
+            <div className="hidden sm:flex items-center gap-2">
+              <span className="text-xs font-bold text-[#0B1B3A] truncate max-w-[120px]">
+                {user.name}
+              </span>
+              {getRoleBadge(user.role)}
             </div>
 
             {/* User Profile Avatar Link */}
             <div 
               onClick={() => navigate('/profile')} 
-              className="w-10 h-10 rounded-[12px] bg-[#E2F6F3] text-[#0FA38F] border border-[#A7F3D0] flex items-center justify-center font-bold text-sm cursor-pointer hover:bg-[#0FA38F] hover:text-white transition-all shadow-sm"
+              className="w-9 h-9 rounded-[10px] bg-[#E2F6F3] text-[#0FA38F] border border-[#A7F3D0] flex items-center justify-center font-bold text-sm cursor-pointer hover:bg-[#0FA38F] hover:text-white transition-all shadow-sm"
               title="Profile Settings"
             >
               {user.name?.charAt(0) || 'U'}
             </div>
+
+            {/* Quick Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#E5484D]/30 text-xs font-bold text-[#E5484D] hover:bg-[#FEE2E2] transition-colors"
+              title="Quick Logout"
+            >
+              <LogOut size={14} />
+              <span className="hidden lg:inline">Logout</span>
+            </button>
           </div>
         </header>
 

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Package, AlertTriangle, IndianRupee } from 'lucide-react';
+import { TrendingUp, Package, AlertTriangle, IndianRupee, ShoppingBag, Coins, Users, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import GlassCard from '../components/ui/GlassCard';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -95,35 +96,84 @@ const Dashboard = () => {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard 
           title="Today's Revenue" 
           value={`₹${stats?.todayRevenue?.toFixed(2) || '0.00'}`} 
           icon={IndianRupee} 
-          color="#00e5ff" 
+          color="#0FA38F" 
           delay={0.1} 
         />
         <StatCard 
-          title="Sales Count" 
+          title="Bills Today" 
           value={stats?.todaySalesCount || 0} 
           icon={TrendingUp} 
-          color="#8b5cf6" 
+          color="#0284C7" 
+          delay={0.15} 
+        />
+        <StatCard 
+          title="Items Sold" 
+          value={stats?.itemsSold || 0} 
+          icon={ShoppingBag} 
+          color="#8B5CF6" 
           delay={0.2} 
         />
         <StatCard 
-          title="Total Products" 
-          value={stats?.totalProducts ?? 0} 
-          icon={Package} 
-          color="#3b82f6" 
-          delay={0.3} 
-        />
-        <StatCard 
-          title="Low Stock Alerts" 
+          title="Low Stock" 
           value={stats?.lowStockCount || 0} 
           icon={AlertTriangle} 
-          color="#f97316" 
-          delay={0.4} 
+          color="#F97316" 
+          delay={0.25} 
         />
+        <StatCard 
+          title="Stock Value" 
+          value={`₹${stats?.stockValue?.toFixed(2) || '0.00'}`} 
+          icon={Coins} 
+          color="#10B981" 
+          delay={0.3} 
+        />
+      </div>
+
+      {/* Store Admin Quick Management Links */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Link to="/products" className="group p-4 bg-white rounded-xl border border-[#E3E8F0] hover:border-[#0FA38F] hover:shadow-md transition-all flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#E2F6F3] text-[#0FA38F] flex items-center justify-center font-bold">
+              <Package size={20} />
+            </div>
+            <div>
+              <div className="font-bold text-[#0B1B3A] group-hover:text-[#0FA38F] text-sm">Product Catalogue</div>
+              <div className="text-xs text-[#53607A]">View, add & update stock</div>
+            </div>
+          </div>
+          <ArrowRight size={16} className="text-[#8B96AB] group-hover:text-[#0FA38F] group-hover:translate-x-1 transition-all" />
+        </Link>
+
+        <Link to="/sales" className="group p-4 bg-white rounded-xl border border-[#E3E8F0] hover:border-[#0284C7] hover:shadow-md transition-all flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#E0F2FE] text-[#0284C7] flex items-center justify-center font-bold">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <div className="font-bold text-[#0B1B3A] group-hover:text-[#0284C7] text-sm">Sales History & Reports</div>
+              <div className="text-xs text-[#53607A]">Filtered transactions & audits</div>
+            </div>
+          </div>
+          <ArrowRight size={16} className="text-[#8B96AB] group-hover:text-[#0284C7] group-hover:translate-x-1 transition-all" />
+        </Link>
+
+        <Link to="/users" className="group p-4 bg-white rounded-xl border border-[#E3E8F0] hover:border-[#7C3AED] hover:shadow-md transition-all flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#EDE9FE] text-[#7C3AED] flex items-center justify-center font-bold">
+              <Users size={20} />
+            </div>
+            <div>
+              <div className="font-bold text-[#0B1B3A] group-hover:text-[#7C3AED] text-sm">Staff Management</div>
+              <div className="text-xs text-[#53607A]">Cashiers & Quota controls</div>
+            </div>
+          </div>
+          <ArrowRight size={16} className="text-[#8B96AB] group-hover:text-[#7C3AED] group-hover:translate-x-1 transition-all" />
+        </Link>
       </div>
 
       <motion.div 
