@@ -25,6 +25,7 @@ api.interceptors.response.use(
     const isAuthRoute =
       error.config?.url?.includes('/auth/login') ||
       error.config?.url?.includes('/auth/register') ||
+      error.config?.url?.includes('/auth/google') ||
       error.config?.url?.includes('/users/login');
 
     const message =

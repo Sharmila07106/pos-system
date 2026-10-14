@@ -53,6 +53,15 @@ export const AuthProvider = ({ children }) => {
     throw new Error(res.data?.message || 'Login failed');
   };
 
+  const loginWithGoogle = async (credential, rememberMe = true) => {
+    const res = await api.post('/auth/google', { credential });
+    if (res.data?.success) {
+      saveAuthSession(res.data.token, res.data.data, rememberMe);
+      return res.data;
+    }
+    throw new Error(res.data?.message || 'Google sign-in failed');
+  };
+
   const register = async ({ name, email, password, rememberMe = true }) => {
     const res = await api.post('/auth/register', { name, email, password });
     if (res.data?.success) {
@@ -83,6 +92,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         isAuthenticated: !!token && !!user,
         login,
+        loginWithGoogle,
         register,
         setSession,
         logout,
