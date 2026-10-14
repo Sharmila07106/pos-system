@@ -35,7 +35,9 @@ const Login = () => {
 
       toast.success(`Welcome back, ${data.data?.name || 'User'}!`);
 
-      if (data.data?.role === 'CASHIER') {
+      if (data.data?.role === 'PLATFORM_ADMIN' || data.data?.isPlatformAdmin) {
+        navigate('/platform-admin');
+      } else if (data.data?.role === 'CASHIER') {
         navigate('/pos');
       } else {
         navigate('/dashboard');
