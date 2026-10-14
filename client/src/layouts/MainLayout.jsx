@@ -11,7 +11,8 @@ import {
   LogOut,
   Menu,
   ChevronRight,
-  Store
+  Store,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StoreFlowLogo, StoreFlowIcon } from '../components/brand/StoreFlowLogo';
@@ -50,16 +51,20 @@ const MainLayout = () => {
   };
 
   const allNavItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'CASHIER'] },
-    { path: '/pos', label: 'POS Checkout', icon: ShoppingCart, roles: ['ADMIN', 'CASHIER'] },
-    { path: '/products', label: 'Products', icon: Package, roles: ['ADMIN'] },
-    { path: '/inventory', label: 'Inventory', icon: Boxes, roles: ['ADMIN'] },
-    { path: '/sales', label: 'Sales History', icon: History, roles: ['ADMIN', 'CASHIER'] },
-    { path: '/users', label: 'Users', icon: Users, roles: ['ADMIN'] },
-    { path: '/profile', label: 'Profile', icon: User, roles: ['ADMIN', 'CASHIER'] },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER'] },
+    { path: '/pos', label: 'POS Checkout', icon: ShoppingCart, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER'] },
+    { path: '/products', label: 'Products', icon: Package, roles: ['ADMIN', 'STORE_OWNER'] },
+    { path: '/inventory', label: 'Inventory', icon: Boxes, roles: ['ADMIN', 'STORE_OWNER', 'INVENTORY_MANAGER'] },
+    { path: '/sales', label: 'Sales History', icon: History, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER'] },
+    { path: '/users', label: 'Staff & Roles', icon: Users, roles: ['ADMIN', 'STORE_OWNER'] },
+    { path: '/profile', label: 'Profile', icon: User, roles: ['ADMIN', 'STORE_OWNER', 'CASHIER', 'INVENTORY_MANAGER'] },
+    { path: '/platform-admin', label: 'Platform Admin', icon: ShieldCheck, roles: ['ADMIN', 'PLATFORM_ADMIN'] },
   ];
 
-  const navItems = allNavItems.filter(item => item.roles.includes(user.role || 'ADMIN'));
+  const userRole = user.role || 'ADMIN';
+  const navItems = allNavItems.filter(item => 
+    item.roles.includes(userRole) || (user.isPlatformAdmin && item.roles.includes('PLATFORM_ADMIN'))
+  );
 
   // Determine current page title
   const currentNav = allNavItems.find(item => item.path === location.pathname);

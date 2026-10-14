@@ -17,6 +17,7 @@ import Home from './pages/Home';
 import SupermarketOnboarding from './pages/SupermarketOnboarding';
 import ApplicationStatus from './pages/ApplicationStatus';
 import ActivateStaff from './pages/ActivateStaff';
+import PlatformAdmin from './pages/PlatformAdmin';
 
 function App() {
   return (
@@ -53,6 +54,7 @@ function App() {
           <Route path="/onboard" element={<SupermarketOnboarding />} />
           <Route path="/application-status" element={<ApplicationStatus />} />
           <Route path="/activate-staff" element={<ActivateStaff />} />
+          <Route path="/platform-admin" element={<PlatformAdmin />} />
           
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />

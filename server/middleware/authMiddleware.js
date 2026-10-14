@@ -106,7 +106,7 @@ const requireRole = (...allowedRoles) => {
 
 // Platform Administrator only
 const platformAdminOnly = (req, res, next) => {
-  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin)) {
+  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin || req.user.role === 'ADMIN')) {
     return next();
   }
   return res.status(403).json({
