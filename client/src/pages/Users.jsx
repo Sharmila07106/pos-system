@@ -15,7 +15,8 @@ import {
   Filter, 
   Sparkles, 
   X,
-  AlertCircle
+  AlertCircle,
+  Sliders
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
@@ -29,6 +30,7 @@ export default function Users() {
   const [activeTab, setActiveTab] = useState('staff'); // 'staff' | 'invitations'
   const [users, setUsers] = useState([]);
   const [invitations, setInvitations] = useState([]);
+  const [staffLimits, setStaffLimits] = useState({ maxInventoryStaff: 5, maxCashiers: 10 });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -41,6 +43,12 @@ export default function Users() {
   const [inviting, setInviting] = useState(false);
   const [generatedInvite, setGeneratedInvite] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+
+  // Staff Limits modal state
+  const [showLimitsModal, setShowLimitsModal] = useState(false);
+  const [limitMaxInventory, setLimitMaxInventory] = useState(5);
+  const [limitMaxCashiers, setLimitMaxCashiers] = useState(10);
+  const [savingLimits, setSavingLimits] = useState(false);
 
   // Edit user role modal
   const [editingUser, setEditingUser] = useState(null);
@@ -55,6 +63,11 @@ export default function Users() {
       if (res.data?.success) {
         setUsers(res.data.data || []);
         setInvitations(res.data.invitations || []);
+        if (res.data.staffLimits) {
+          setStaffLimits(res.data.staffLimits);
+          setLimitMaxInventory(res.data.staffLimits.maxInventoryStaff ?? 5);
+          setLimitMaxCashiers(res.data.staffLimits.maxCashiers ?? 10);
+        }
       }
     } catch (err) {
       console.error('Failed to load users:', err);
@@ -175,6 +188,40 @@ export default function Users() {
     }
   };
 
+  // Handle save staff limits
+  const handleSaveLimits = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingLimits(true);
+      const res = await api.put('/users/limits', {
+        maxInventoryStaff: Number(limitMaxInventory),
+        maxCashiers: Number(limitMaxCashiers),
+      });
+      if (res.data?.success) {
+        toast.success('Staff limits updated successfully!');
+        setStaffLimits(res.data.data);
+        setShowLimitsModal(false);
+        loadUsersData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update staff limits');
+    } finally {
+      setSavingLimits(false);
+    }
+  };
+
+  // Staff limit counters (active + pending)
+  const activeCashiers = users.filter((u) => ['CASHIER', 'cashier'].includes(u.role) && u.status !== 'Disabled').length;
+  const pendingCashiers = invitations.filter((i) => ['CASHIER', 'cashier'].includes(i.role) && i.status === 'PENDING').length;
+  const totalCashiers = activeCashiers + pendingCashiers;
+
+  const activeInventory = users.filter((u) => ['INVENTORY_MANAGER', 'inventory_manager'].includes(u.role) && u.status !== 'Disabled').length;
+  const pendingInventory = invitations.filter((i) => ['INVENTORY_MANAGER', 'inventory_manager'].includes(i.role) && i.status === 'PENDING').length;
+  const totalInventory = activeInventory + pendingInventory;
+
+  const isCashierLimitReached = totalCashiers >= (staffLimits.maxCashiers ?? 10);
+  const isInventoryLimitReached = totalInventory >= (staffLimits.maxInventoryStaff ?? 5);
+
   // Filtered staff
   const filteredUsers = users.filter((u) => {
     const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
@@ -196,9 +243,12 @@ export default function Users() {
   const getRoleBadge = (role) => {
     switch (role) {
       case 'STORE_OWNER':
+      case 'STORE_ADMIN':
+      case 'store_admin':
       case 'ADMIN':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30 uppercase">Store Owner</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30 uppercase">Store Admin</span>;
       case 'INVENTORY_MANAGER':
+      case 'inventory_manager':
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#EDE9FE] text-[#7C3AED] border border-[#7C3AED]/30 uppercase">Inventory Manager</span>;
       default:
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E0F2FE] text-[#0284C7] border border-[#0284C7]/30 uppercase">Cashier</span>;
@@ -214,36 +264,88 @@ export default function Users() {
             Staff & Access Management
           </h1>
           <p className="text-sm font-medium text-[#53607A] mt-1">
-            Manage your supermarket cashiers, inventory managers, and role permissions.
+            Manage your supermarket cashiers, inventory managers, and role quotas.
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          size="md"
-          onClick={() => {
-            setGeneratedInvite(null);
-            setInviteName('');
-            setInviteEmail('');
-            setInviteRole('CASHIER');
-            setShowInviteModal(true);
-          }}
-          className="shadow-md shadow-[#0FA38F]/20 font-bold"
-        >
-          <UserPlus size={16} className="mr-2" />
-          Invite Staff Member
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => {
+              setLimitMaxInventory(staffLimits.maxInventoryStaff ?? 5);
+              setLimitMaxCashiers(staffLimits.maxCashiers ?? 10);
+              setShowLimitsModal(true);
+            }}
+            className="font-bold border-[#CBD5E1] text-[#0B1B3A] hover:bg-[#F4F7FB]"
+          >
+            <Sliders size={16} className="mr-2 text-[#53607A]" />
+            Staff Limits
+          </Button>
+
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => {
+              setGeneratedInvite(null);
+              setInviteName('');
+              setInviteEmail('');
+              setInviteRole('CASHIER');
+              setShowInviteModal(true);
+            }}
+            className="shadow-md shadow-[#0FA38F]/20 font-bold"
+          >
+            <UserPlus size={16} className="mr-2" />
+            Invite Staff Member
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Quick Ribbon */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Stats Quick Ribbon with Quota Capacities */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card className="p-4 bg-white border-[#E3E8F0] flex items-center justify-between">
           <div>
-            <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Active Employees</div>
+            <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Active Staff</div>
             <div className="text-2xl font-extrabold text-[#0B1B3A] mt-0.5">{users.length}</div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-[#0B1B3A]/5 text-[#0B1B3A] flex items-center justify-center font-bold">
             <UsersIcon size={20} />
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-white border-[#E3E8F0] flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Cashiers Quota</div>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className={`text-2xl font-extrabold ${isCashierLimitReached ? 'text-[#E5484D]' : 'text-[#0284C7]'}`}>
+                {totalCashiers}
+              </span>
+              <span className="text-sm font-semibold text-[#53607A]">/ {staffLimits.maxCashiers ?? 10}</span>
+            </div>
+            {isCashierLimitReached && (
+              <span className="text-[10px] font-bold text-[#E5484D] uppercase">Limit reached</span>
+            )}
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-[#E0F2FE] text-[#0284C7] flex items-center justify-center font-bold">
+            <Shield size={20} />
+          </div>
+        </Card>
+
+        <Card className="p-4 bg-white border-[#E3E8F0] flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Inventory Quota</div>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className={`text-2xl font-extrabold ${isInventoryLimitReached ? 'text-[#E5484D]' : 'text-[#7C3AED]'}`}>
+                {totalInventory}
+              </span>
+              <span className="text-sm font-semibold text-[#53607A]">/ {staffLimits.maxInventoryStaff ?? 5}</span>
+            </div>
+            {isInventoryLimitReached && (
+              <span className="text-[10px] font-bold text-[#E5484D] uppercase">Limit reached</span>
+            )}
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-[#EDE9FE] text-[#7C3AED] flex items-center justify-center font-bold">
+            <Shield size={20} />
           </div>
         </Card>
 
@@ -256,18 +358,6 @@ export default function Users() {
           </div>
           <div className="w-10 h-10 rounded-xl bg-[#FEF3C7] text-[#D97706] flex items-center justify-center font-bold">
             <Clock size={20} />
-          </div>
-        </Card>
-
-        <Card className="p-4 bg-white border-[#E3E8F0] flex items-center justify-between">
-          <div>
-            <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Access Security</div>
-            <div className="text-sm font-extrabold text-[#0FA38F] mt-1 flex items-center gap-1.5">
-              <CheckCircle2 size={16} /> Token Expiry (48h)
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-[#E2F6F3] text-[#0FA38F] flex items-center justify-center font-bold">
-            <Shield size={20} />
           </div>
         </Card>
       </div>
@@ -633,9 +723,27 @@ export default function Users() {
                   >
                     <option value="CASHIER">CASHIER (Counter Billing, Scan & Tender)</option>
                     <option value="INVENTORY_MANAGER">INVENTORY MANAGER (Stock In, Batches, Adjustments)</option>
-                    <option value="STORE_OWNER">CO-ADMIN / STORE MANAGER (Full Supermarket Control)</option>
                   </select>
                 </div>
+
+                {/* Role Limit Warning */}
+                {inviteRole === 'CASHIER' && isCashierLimitReached && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Cashier Quota Reached ({totalCashiers}/{staffLimits.maxCashiers}):</strong> You cannot invite more cashiers until you increase the cashier limit or remove an existing cashier.
+                    </span>
+                  </div>
+                )}
+
+                {inviteRole === 'INVENTORY_MANAGER' && isInventoryLimitReached && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Inventory Staff Quota Reached ({totalInventory}/{staffLimits.maxInventoryStaff}):</strong> You cannot invite more inventory staff until you increase the inventory limit or remove existing staff.
+                    </span>
+                  </div>
+                )}
 
                 <div className="pt-2 flex items-center justify-end gap-3">
                   <Button
@@ -650,7 +758,11 @@ export default function Users() {
                     type="submit"
                     variant="primary"
                     size="md"
-                    disabled={inviting}
+                    disabled={
+                      inviting ||
+                      (inviteRole === 'CASHIER' && isCashierLimitReached) ||
+                      (inviteRole === 'INVENTORY_MANAGER' && isInventoryLimitReached)
+                    }
                     className="font-bold"
                   >
                     {inviting ? 'Generating...' : 'Generate Invitation'}
@@ -685,7 +797,7 @@ export default function Users() {
               >
                 <option value="CASHIER">CASHIER</option>
                 <option value="INVENTORY_MANAGER">INVENTORY_MANAGER</option>
-                <option value="STORE_OWNER">STORE_OWNER / ADMIN</option>
+                <option value="STORE_ADMIN">STORE_ADMIN</option>
               </select>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -694,6 +806,89 @@ export default function Users() {
                 </Button>
                 <Button type="submit" variant="primary" size="sm" disabled={updatingRole} className="font-bold">
                   {updatingRole ? 'Saving...' : 'Update Role'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Staff Limits Modal */}
+      {showLimitsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full border border-[#E3E8F0] shadow-2xl overflow-hidden">
+            <div className="p-6 bg-[#0B1B3A] text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#0FA38F]/20 text-[#0FA38F] flex items-center justify-center">
+                  <Sliders size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold">Configure Staff Limits</h3>
+                  <p className="text-xs text-white/70">Set maximum staff quota for your store</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLimitsModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLimits} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#0B1B3A] mb-1.5">
+                  Max Cashiers Quota *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  required
+                  value={limitMaxCashiers}
+                  onChange={(e) => setLimitMaxCashiers(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0B1B3A] focus:outline-none focus:border-[#0FA38F]"
+                />
+                <p className="text-[11px] text-[#53607A] mt-1">
+                  Currently active + pending: <strong>{totalCashiers}</strong> cashier(s).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#0B1B3A] mb-1.5">
+                  Max Inventory Staff Quota *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  required
+                  value={limitMaxInventory}
+                  onChange={(e) => setLimitMaxInventory(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0B1B3A] focus:outline-none focus:border-[#0FA38F]"
+                />
+                <p className="text-[11px] text-[#53607A] mt-1">
+                  Currently active + pending: <strong>{totalInventory}</strong> inventory manager(s).
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  onClick={() => setShowLimitsModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  disabled={savingLimits}
+                  className="font-bold"
+                >
+                  {savingLimits ? 'Saving...' : 'Save Quotas'}
                 </Button>
               </div>
             </form>

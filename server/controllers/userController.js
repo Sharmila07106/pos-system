@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Store = require('../models/Store');
+const Settings = require('../models/Settings');
 const Invitation = require('../models/Invitation');
 const AuditLog = require('../models/AuditLog');
 
@@ -24,6 +25,7 @@ const getUsers = async (req, res) => {
           count: 0,
           data: [],
           invitations: [],
+          staffLimits: { maxInventoryStaff: 5, maxCashiers: 10 },
         });
       }
       query.store = storeId;
@@ -35,8 +37,17 @@ const getUsers = async (req, res) => {
       .sort({ createdAt: -1 });
 
     let invitations = [];
+    let staffLimits = { maxInventoryStaff: 5, maxCashiers: 10 };
+
     if (storeId) {
       invitations = await Invitation.find({ store: storeId }).sort({ createdAt: -1 });
+      const storeDoc = await Store.findById(storeId).select('maxInventoryStaff maxCashiers').catch(() => null);
+      if (storeDoc) {
+        staffLimits = {
+          maxInventoryStaff: storeDoc.maxInventoryStaff ?? 5,
+          maxCashiers: storeDoc.maxCashiers ?? 10,
+        };
+      }
     }
 
     return res.json({
@@ -44,6 +55,7 @@ const getUsers = async (req, res) => {
       count: users.length,
       data: users,
       invitations,
+      staffLimits,
     });
   } catch (error) {
     console.error('getUsers error:', error);
@@ -54,7 +66,81 @@ const getUsers = async (req, res) => {
   }
 };
 
-// @desc    Invite new staff member with secure single-use token
+// @desc    Get store staff limits
+// @route   GET /api/users/limits
+// @access  Store Owner / Store Admin Only
+const getStaffLimits = async (req, res) => {
+  try {
+    const storeId = req.storeId;
+    let storeDoc = null;
+    if (storeId) {
+      storeDoc = await Store.findById(storeId).catch(() => null);
+    }
+    return res.json({
+      success: true,
+      data: {
+        maxInventoryStaff: storeDoc?.maxInventoryStaff ?? 5,
+        maxCashiers: storeDoc?.maxCashiers ?? 10,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update store staff limits (max inventory staff, max cashiers)
+// @route   PUT /api/users/limits
+// @access  Store Owner / Store Admin Only
+const updateStaffLimits = async (req, res) => {
+  try {
+    const storeId = req.storeId;
+    if (!storeId) {
+      return res.status(403).json({ success: false, message: 'Store context required' });
+    }
+
+    const { maxInventoryStaff, maxCashiers } = req.body;
+    const updateData = {};
+    if (maxInventoryStaff !== undefined) {
+      const num = parseInt(maxInventoryStaff, 10);
+      if (isNaN(num) || num < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'maxInventoryStaff must be a non-negative number',
+        });
+      }
+      updateData.maxInventoryStaff = num;
+    }
+    if (maxCashiers !== undefined) {
+      const num = parseInt(maxCashiers, 10);
+      if (isNaN(num) || num < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'maxCashiers must be a non-negative number',
+        });
+      }
+      updateData.maxCashiers = num;
+    }
+
+    let updatedStore = null;
+    if (storeId) {
+      updatedStore = await Store.findByIdAndUpdate(storeId, { $set: updateData }, { new: true }).catch(() => null);
+      await Settings.findOneAndUpdate({ store: storeId }, { $set: updateData }).catch(() => null);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Staff limits updated successfully',
+      data: {
+        maxInventoryStaff: updatedStore?.maxInventoryStaff ?? updateData.maxInventoryStaff ?? 5,
+        maxCashiers: updatedStore?.maxCashiers ?? updateData.maxCashiers ?? 10,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Invite new staff member with secure single-use token and role limit enforcement
 // @route   POST /api/users/invite
 // @access  Store Owner / Admin Only
 const inviteStaff = async (req, res) => {
@@ -68,11 +154,14 @@ const inviteStaff = async (req, res) => {
       });
     }
 
-    const allowedRoles = ['INVENTORY_MANAGER', 'CASHIER', 'STORE_OWNER'];
-    if (!allowedRoles.includes(role)) {
+    const normalizedRole = (role || '').toUpperCase();
+    if (
+      normalizedRole !== 'INVENTORY_MANAGER' &&
+      normalizedRole !== 'CASHIER'
+    ) {
       return res.status(400).json({
         success: false,
-        message: `Role must be one of: ${allowedRoles.join(', ')}`,
+        message: 'Role must be either inventory_manager or cashier',
       });
     }
 
@@ -86,6 +175,56 @@ const inviteStaff = async (req, res) => {
         success: false,
         message: 'No supermarket store context found for invitation',
       });
+    }
+
+    // Check staff limits
+    let storeDoc = null;
+    if (storeId) {
+      storeDoc = await Store.findById(storeId).catch(() => null);
+    }
+    const maxInventoryStaff = storeDoc?.maxInventoryStaff ?? 5;
+    const maxCashiers = storeDoc?.maxCashiers ?? 10;
+
+    if (normalizedRole === 'INVENTORY_MANAGER') {
+      const activeCount = await User.countDocuments({
+        store: storeId,
+        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
+        isActive: true,
+      });
+      const pendingCount = await Invitation.countDocuments({
+        store: storeId,
+        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
+        status: 'PENDING',
+        expiresAt: { $gt: new Date() },
+      });
+
+      if (activeCount + pendingCount >= maxInventoryStaff) {
+        return res.status(400).json({
+          success: false,
+          code: 'STAFF_LIMIT_EXCEEDED',
+          message: `Inventory staff limit reached (${activeCount + pendingCount}/${maxInventoryStaff}). Please adjust staff limits in store settings.`,
+        });
+      }
+    } else if (normalizedRole === 'CASHIER') {
+      const activeCount = await User.countDocuments({
+        store: storeId,
+        role: { $in: ['CASHIER', 'cashier'] },
+        isActive: true,
+      });
+      const pendingCount = await Invitation.countDocuments({
+        store: storeId,
+        role: { $in: ['CASHIER', 'cashier'] },
+        status: 'PENDING',
+        expiresAt: { $gt: new Date() },
+      });
+
+      if (activeCount + pendingCount >= maxCashiers) {
+        return res.status(400).json({
+          success: false,
+          code: 'STAFF_LIMIT_EXCEEDED',
+          message: `Cashier staff limit reached (${activeCount + pendingCount}/${maxCashiers}). Please adjust staff limits in store settings.`,
+        });
+      }
     }
 
     // Check if user is already registered in DB
@@ -118,7 +257,7 @@ const inviteStaff = async (req, res) => {
       store: storeId,
       email: cleanEmail,
       name: name.trim(),
-      role,
+      role: normalizedRole,
       token,
       expiresAt,
       invitedBy: req.user._id,
@@ -133,12 +272,12 @@ const inviteStaff = async (req, res) => {
       action: 'STAFF_INVITED',
       entity: 'Invitation',
       entityId: invitation._id.toString(),
-      details: { email: cleanEmail, role, name: name.trim() },
+      details: { email: cleanEmail, role: normalizedRole, name: name.trim() },
     }).catch(() => {});
 
     return res.status(201).json({
       success: true,
-      message: `Invitation generated successfully for ${name} (${role})`,
+      message: `Invitation generated successfully for ${name} (${normalizedRole})`,
       data: invitation,
       activationLink: `/activate-staff?token=${token}`,
     });
@@ -146,28 +285,27 @@ const inviteStaff = async (req, res) => {
     console.error('inviteStaff error:', error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Failed to generate staff invitation',
+      message: error.message || 'Failed to send staff invitation',
     });
   }
 };
 
-// @desc    Resend / renew staff invitation
+// @desc    Resend / Renew Invitation Token
 // @route   POST /api/users/invite/:id/resend
 // @access  Store Owner / Admin Only
 const resendInvitation = async (req, res) => {
   try {
-    const newToken = crypto.randomBytes(24).toString('hex');
-    const newExpiresAt = new Date(Date.now() + 48 * 3600 * 1000);
-
     const invite = await Invitation.findById(req.params.id);
     if (!invite) {
-      return res.status(404).json({ success: false, message: 'Invitation not found' });
+      return res.status(404).json({ success: false, message: 'Invitation record not found' });
     }
 
-    // Check store scope
     if (req.user.role !== 'PLATFORM_ADMIN' && invite.store?.toString() !== req.storeId) {
-      return res.status(403).json({ success: false, message: 'Unauthorized access to this invitation' });
+      return res.status(403).json({ success: false, message: 'Unauthorized access to invitation' });
     }
+
+    const newToken = crypto.randomBytes(24).toString('hex');
+    const newExpiresAt = new Date(Date.now() + 48 * 3600 * 1000);
 
     invite.token = newToken;
     invite.expiresAt = newExpiresAt;
@@ -176,7 +314,7 @@ const resendInvitation = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Invitation renewed with fresh activation link',
+      message: `Invitation renewed with fresh token for ${invite.email}`,
       data: invite,
       activationLink: `/activate-staff?token=${newToken}`,
     });
@@ -186,18 +324,18 @@ const resendInvitation = async (req, res) => {
   }
 };
 
-// @desc    Revoke a pending staff invitation
+// @desc    Revoke Invitation Token
 // @route   DELETE /api/users/invite/:id
 // @access  Store Owner / Admin Only
 const revokeInvitation = async (req, res) => {
   try {
     const invite = await Invitation.findById(req.params.id);
     if (!invite) {
-      return res.status(404).json({ success: false, message: 'Invitation not found' });
+      return res.status(404).json({ success: false, message: 'Invitation record not found' });
     }
 
     if (req.user.role !== 'PLATFORM_ADMIN' && invite.store?.toString() !== req.storeId) {
-      return res.status(403).json({ success: false, message: 'Unauthorized access to this invitation' });
+      return res.status(403).json({ success: false, message: 'Unauthorized access to invitation' });
     }
 
     invite.status = 'REVOKED';
@@ -205,7 +343,7 @@ const revokeInvitation = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Staff invitation revoked successfully',
+      message: `Invitation for ${invite.email} has been revoked`,
     });
   } catch (error) {
     console.error('revokeInvitation error:', error);
@@ -213,7 +351,7 @@ const revokeInvitation = async (req, res) => {
   }
 };
 
-// @desc    Create staff directly (Admin shortcut)
+// @desc    Create staff directly (Admin shortcut with limit enforcement)
 // @route   POST /api/users
 // @access  Store Owner / Admin Only
 const createUser = async (req, res) => {
@@ -245,9 +383,44 @@ const createUser = async (req, res) => {
       });
     }
 
-    // Disallow elevating to PLATFORM_ADMIN via store user creation
+    // Role check and limits
     const allowedRoles = ['INVENTORY_MANAGER', 'CASHIER', 'STORE_OWNER', 'ADMIN'];
     const assignedRole = allowedRoles.includes(role) ? role : 'CASHIER';
+
+    let storeDoc = null;
+    if (storeId) {
+      storeDoc = await Store.findById(storeId).catch(() => null);
+    }
+    const maxInventoryStaff = storeDoc?.maxInventoryStaff ?? 5;
+    const maxCashiers = storeDoc?.maxCashiers ?? 10;
+
+    if (assignedRole === 'INVENTORY_MANAGER') {
+      const activeCount = await User.countDocuments({
+        store: storeId,
+        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
+        isActive: true,
+      });
+      if (activeCount >= maxInventoryStaff) {
+        return res.status(400).json({
+          success: false,
+          code: 'STAFF_LIMIT_EXCEEDED',
+          message: `Inventory staff limit reached (${activeCount}/${maxInventoryStaff}).`,
+        });
+      }
+    } else if (assignedRole === 'CASHIER') {
+      const activeCount = await User.countDocuments({
+        store: storeId,
+        role: { $in: ['CASHIER', 'cashier'] },
+        isActive: true,
+      });
+      if (activeCount >= maxCashiers) {
+        return res.status(400).json({
+          success: false,
+          code: 'STAFF_LIMIT_EXCEEDED',
+          message: `Cashier staff limit reached (${activeCount}/${maxCashiers}).`,
+        });
+      }
+    }
 
     const user = await User.create({
       name: name.trim(),
@@ -280,14 +453,14 @@ const createUser = async (req, res) => {
   }
 };
 
-// @desc    Update user details, role or status
+// @desc    Update staff user
 // @route   PUT /api/users/:id
 // @access  Store Owner / Admin Only
 const updateUser = async (req, res) => {
   try {
     const { name, role, status, password } = req.body;
-
     const user = await User.findById(req.params.id);
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -305,7 +478,7 @@ const updateUser = async (req, res) => {
           message: 'You cannot disable your own administrator account',
         });
       }
-      if (role && !['ADMIN', 'STORE_OWNER', 'PLATFORM_ADMIN'].includes(role)) {
+      if (role && !['ADMIN', 'STORE_OWNER', 'STORE_ADMIN', 'store_admin', 'PLATFORM_ADMIN'].includes(role)) {
         return res.status(400).json({
           success: false,
           message: 'You cannot demote your own administrator role',
@@ -322,7 +495,9 @@ const updateUser = async (req, res) => {
     }
 
     if (name) user.name = name.trim();
-    if (role && ['STORE_OWNER', 'ADMIN', 'INVENTORY_MANAGER', 'CASHIER'].includes(role)) user.role = role;
+    if (role && ['STORE_OWNER', 'STORE_ADMIN', 'ADMIN', 'INVENTORY_MANAGER', 'CASHIER', 'inventory_manager', 'cashier'].includes(role)) {
+      user.role = role;
+    }
     if (status && ['Active', 'Disabled'].includes(status)) {
       user.status = status;
       user.isActive = status === 'Active';
@@ -398,6 +573,8 @@ module.exports = {
   inviteStaff,
   resendInvitation,
   revokeInvitation,
+  getStaffLimits,
+  updateStaffLimits,
   memoryStaff,
   memoryInvitations,
 };

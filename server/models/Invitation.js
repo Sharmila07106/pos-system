@@ -21,7 +21,7 @@ const invitationSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['INVENTORY_MANAGER', 'CASHIER'],
+      enum: ['INVENTORY_MANAGER', 'CASHIER', 'inventory_manager', 'cashier'],
       required: true,
     },
     token: {

@@ -8,6 +8,8 @@ const {
   inviteStaff,
   resendInvitation,
   revokeInvitation,
+  getStaffLimits,
+  updateStaffLimits,
 } = require('../controllers/userController');
 const { loginUser } = require('../controllers/authController');
 const {
@@ -22,6 +24,10 @@ router.post('/login', loginUser);
 // All staff and user management endpoints require active approved store and owner/admin privileges
 router.use(protect);
 router.use(requireActiveStore);
+
+// Staff Limits endpoints
+router.get('/limits', storeOwnerOnly, getStaffLimits);
+router.put('/limits', storeOwnerOnly, updateStaffLimits);
 
 // Staff Invitation endpoints
 router.post('/invite', storeOwnerOnly, inviteStaff);

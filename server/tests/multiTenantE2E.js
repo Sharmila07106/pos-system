@@ -18,6 +18,13 @@ const {
   getComplaintsReport,
 } = require('../controllers/reportController');
 const { requireActiveStore, forbidPlatformAdmin } = require('../middleware/authMiddleware');
+const {
+  inviteStaff,
+  getStaffLimits,
+  updateStaffLimits,
+  revokeInvitation,
+} = require('../controllers/userController');
+const { activateStaff } = require('../controllers/authController');
 
 const Store = require('../models/Store');
 const User = require('../models/User');
@@ -25,6 +32,7 @@ const Product = require('../models/Product');
 const Complaint = require('../models/Complaint');
 const Settings = require('../models/Settings');
 const ActivityLog = require('../models/ActivityLog');
+const Invitation = require('../models/Invitation');
 
 async function runMultiTenantTestSuite() {
   console.log('====================================================');
@@ -515,6 +523,259 @@ async function runMultiTenantTestSuite() {
     User.find = origUserFind;
     Product.countDocuments = origProdCount;
     Complaint.find = origCompFind;
+  }
+
+  // TEST 8: Staff Invitations, Token Activation & Quota Limits Matrix
+  console.log('\n--- SUITE 6: Staff Invitations, Token Activation & Limit Enforcement ---');
+  {
+    const origStoreFindById = Store.findById;
+    const origStoreFindByIdAndUpdate = Store.findByIdAndUpdate;
+    const origUserCount = User.countDocuments;
+    const origUserFindOne = User.findOne;
+    const origUserCreate = User.create;
+    const origInviteCount = Invitation.countDocuments;
+    const origInviteFindOne = Invitation.findOne;
+    const origInviteFindById = Invitation.findById;
+    const origInviteCreate = Invitation.create;
+
+    const mockStore = {
+      _id: 'store_limit_test',
+      status: 'ACTIVE',
+      maxInventoryStaff: 2,
+      maxCashiers: 3,
+    };
+
+    Store.findById = async (id) => mockStore;
+    Store.findByIdAndUpdate = async (id, update) => {
+      Object.assign(mockStore, update.$set);
+      return mockStore;
+    };
+
+    // Sub-test 6.1: Reject invite with unauthorized role (e.g. STORE_OWNER)
+    {
+      const { req, res } = mockReqRes(
+        { name: 'Ravi', email: 'ravi@store.com', role: 'STORE_OWNER' },
+        {},
+        {},
+        { _id: 'admin_1', role: 'STORE_ADMIN' },
+        'store_limit_test'
+      );
+      await inviteStaff(req, res);
+      assert(
+        res.statusCode === 400 && res.data?.message?.includes('inventory_manager or cashier'),
+        'Invite rejects unauthorized role (only inventory_manager or cashier permitted)'
+      );
+    }
+
+    // Sub-test 6.2: Successful invite returns token and 48h expiry link
+    {
+      User.countDocuments = async () => 1;
+      Invitation.countDocuments = async () => 0;
+      User.findOne = async () => null;
+      Invitation.findOne = async () => null;
+      Invitation.create = async (doc) => ({
+        _id: 'invite_123',
+        ...doc,
+        save: async function () { return this; },
+      });
+
+      const { req, res } = mockReqRes(
+        { name: 'Kavitha Cashier', email: 'kavitha@freshmart.com', role: 'cashier' },
+        {},
+        {},
+        { _id: 'admin_1', role: 'STORE_ADMIN' },
+        'store_limit_test'
+      );
+      await inviteStaff(req, res);
+      assert(
+        res.statusCode === 201 &&
+          res.data?.activationLink?.includes('/activate-staff?token=') &&
+          res.data?.data?.role === 'CASHIER',
+        'Store admin can invite cashier with 48h activation token link'
+      );
+    }
+
+    // Sub-test 6.3: Reject invite when cashier limit is exceeded
+    {
+      User.countDocuments = async () => 2;
+      Invitation.countDocuments = async () => 1; // 2 active + 1 pending = 3 = maxCashiers
+      const { req, res } = mockReqRes(
+        { name: 'Extra Cashier', email: 'extra@freshmart.com', role: 'cashier' },
+        {},
+        {},
+        { _id: 'admin_1', role: 'STORE_ADMIN' },
+        'store_limit_test'
+      );
+      await inviteStaff(req, res);
+      assert(
+        res.statusCode === 400 &&
+          res.data?.code === 'STAFF_LIMIT_EXCEEDED' &&
+          res.data?.message?.includes('limit reached'),
+        'Backend rejects staff invite when cashier quota is exceeded (400 STAFF_LIMIT_EXCEEDED)'
+      );
+    }
+
+    // Sub-test 6.4: Store Admin updates staff limits
+    {
+      const { req, res } = mockReqRes(
+        { maxCashiers: 10, maxInventoryStaff: 6 },
+        {},
+        {},
+        { _id: 'admin_1', role: 'STORE_ADMIN' },
+        'store_limit_test'
+      );
+      await updateStaffLimits(req, res);
+      assert(
+        res.statusCode === 200 &&
+          res.data?.data?.maxCashiers === 10 &&
+          res.data?.data?.maxInventoryStaff === 6,
+        'Store admin can update staff quotas via PUT /api/users/limits'
+      );
+    }
+
+    // Sub-test 6.5: Staff activation blocked if store is PENDING or SUSPENDED
+    {
+      Invitation.findOne = async () => ({
+        _id: 'inv_pending_store',
+        email: 'staff@pendingstore.com',
+        token: 'token_pending_store',
+        role: 'CASHIER',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+        store: 'store_pending_id',
+      });
+      Store.findById = async () => ({
+        _id: 'store_pending_id',
+        status: 'PENDING',
+      });
+
+      const { req, res } = mockReqRes({
+        token: 'token_pending_store',
+        password: 'Password123',
+      });
+      await activateStaff(req, res);
+      assert(
+        res.statusCode === 403 && res.data?.code === 'STORE_PENDING',
+        'Staff activation is blocked with 403 when supermarket store is not ACTIVE'
+      );
+    }
+
+    // Sub-test 6.6: Staff activation succeeds for ACTIVE store
+    {
+      Store.findById = async () => ({
+        _id: 'store_limit_test',
+        status: 'ACTIVE',
+        maxCashiers: 10,
+      });
+      Invitation.findOne = async () => ({
+        _id: 'inv_valid',
+        name: 'Kavitha Cashier',
+        email: 'kavitha@freshmart.com',
+        token: 'valid_token_123',
+        role: 'CASHIER',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+        store: 'store_limit_test',
+        save: async function () { this.status = 'ACCEPTED'; return this; },
+      });
+      User.countDocuments = async () => 2;
+      User.findOne = async () => null;
+      User.create = async (doc) => ({
+        _id: 'user_new_cashier',
+        ...doc,
+        save: async function () { return this; },
+      });
+
+      const { req, res } = mockReqRes({
+        token: 'valid_token_123',
+        password: 'Password123',
+      });
+      await activateStaff(req, res);
+      assert(
+        res.statusCode === 201 &&
+          res.data?.token &&
+          res.data?.data?.role === 'CASHIER' &&
+          res.data?.data?.status === 'Active',
+        'Staff activation with valid token creates account, sets role, and returns JWT session'
+      );
+    }
+
+    // Sub-test 6.7: Staff activation blocked if staff quota reached
+    {
+      Store.findById = async () => ({
+        _id: 'store_limit_test',
+        status: 'ACTIVE',
+        maxCashiers: 2,
+      });
+      Invitation.findOne = async () => ({
+        _id: 'inv_over_limit',
+        email: 'over@limit.com',
+        token: 'over_limit_token',
+        role: 'CASHIER',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+        store: 'store_limit_test',
+      });
+      User.countDocuments = async () => 2; // Active cashiers already at max 2
+
+      const { req, res } = mockReqRes({
+        token: 'over_limit_token',
+        password: 'Password123',
+      });
+      await activateStaff(req, res);
+      assert(
+        res.statusCode === 400 && res.data?.code === 'STAFF_LIMIT_EXCEEDED',
+        'Staff activation is rejected with 400 STAFF_LIMIT_EXCEEDED if store quota was reached'
+      );
+    }
+
+    // Sub-test 6.8: Expired or already used token rejected with 400
+    {
+      Invitation.findOne = async () => null;
+      const { req, res } = mockReqRes({
+        token: 'invalid_or_expired_token',
+        password: 'Password123',
+      });
+      await activateStaff(req, res);
+      assert(
+        res.statusCode === 400 && res.data?.message?.includes('Invalid, expired, or previously used'),
+        'Activation with invalid or expired token is rejected with 400'
+      );
+    }
+
+    // Sub-test 6.9: Store admin revoking staff invitation
+    {
+      Invitation.findById = async () => ({
+        _id: 'inv_to_revoke',
+        email: 'staff@revoke.com',
+        store: 'store_limit_test',
+        status: 'PENDING',
+        save: async function () { return this; },
+      });
+      const { req, res } = mockReqRes(
+        {},
+        {},
+        { id: 'inv_to_revoke' },
+        { _id: 'admin_1', role: 'STORE_ADMIN' },
+        'store_limit_test'
+      );
+      await revokeInvitation(req, res);
+      assert(
+        res.statusCode === 200 && res.data?.message?.includes('has been revoked'),
+        'Store admin can revoke pending staff invitation'
+      );
+    }
+
+    // Restore mocks
+    Store.findById = origStoreFindById;
+    Store.findByIdAndUpdate = origStoreFindByIdAndUpdate;
+    User.countDocuments = origUserCount;
+    User.findOne = origUserFindOne;
+    User.create = origUserCreate;
+    Invitation.countDocuments = origInviteCount;
+    Invitation.findOne = origInviteFindOne;
+    Invitation.findById = origInviteFindById;
+    Invitation.create = origInviteCreate;
   }
 
   console.log('\n====================================================');

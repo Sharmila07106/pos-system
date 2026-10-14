@@ -49,6 +49,16 @@ const settingsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    maxInventoryStaff: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    maxCashiers: {
+      type: Number,
+      default: 10,
+      min: 0,
+    },
   },
   {
     timestamps: true,

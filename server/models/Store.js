@@ -103,6 +103,16 @@ const storeSchema = new mongoose.Schema(
       type: String,
       default: 'Thank you for shopping with us! Visit again.',
     },
+    maxInventoryStaff: {
+      type: Number,
+      default: 5,
+      min: 0,
+    },
+    maxCashiers: {
+      type: Number,
+      default: 10,
+      min: 0,
+    },
   },
   {
     timestamps: true,
