@@ -52,10 +52,25 @@ router.put('/complaints/:id/status', updateComplaintStatus);
 router.put('/complaints/:id/assign', assignComplaint);
 router.post('/complaints/:id/messages', addComplaintMessage);
 
+const {
+  getPlatformSummaryReport,
+  getSupermarketsReport,
+  getStaffAccessReport,
+  getComplaintsReport,
+  getSingleStoreReport,
+} = require('../controllers/reportController');
+
 // Announcements Broadcast
 router.get('/announcements', getAnnouncements);
 router.post('/announcements', createAnnouncement);
 router.put('/announcements/:id', updateAnnouncement);
 router.delete('/announcements/:id', deleteAnnouncement);
+
+// PDF Reports Download
+router.get('/reports/platform-summary.pdf', getPlatformSummaryReport);
+router.get('/reports/supermarkets.pdf', getSupermarketsReport);
+router.get('/reports/staff-access.pdf', getStaffAccessReport);
+router.get('/reports/complaints.pdf', getComplaintsReport);
+router.get('/reports/stores/:id.pdf', getSingleStoreReport);
 
 module.exports = router;
