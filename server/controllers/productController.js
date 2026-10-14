@@ -1,100 +1,69 @@
 const Product = require('../models/Product');
 const asyncHandler = require('express-async-handler');
 const mongoose = require('mongoose');
-const fs = require('fs');
-const path = require('path');
-const { products: seedProductsList } = require('../utils/seedProducts');
 
-// In-memory product storage fallback when MongoDB connection is inactive
-const memoryProducts = seedProductsList.map((p, idx) => ({
-  _id: `prod_${idx + 1}`,
-  name: p.name,
-  barcode: p.barcode,
-  category: p.category,
-  price: p.price,
-  stock: p.stock,
-  lowStockThreshold: p.lowStockThreshold || 5,
-  image: p.image || '',
-  isActive: p.isActive !== false,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString()
-}));
+// Empty memory fallback for tests / backward compatibility
+const memoryProducts = [];
 
-// @desc    Get all products
+// @desc    Get all products for the current supermarket store
 // @route   GET /api/products
 // @access  Private
 const getProducts = asyncHandler(async (req, res) => {
   const { search, category, activeOnly, page = 1, limit = 50 } = req.query;
 
-  if (mongoose.connection.readyState === 1) {
-    try {
-      let query = {};
-      
-      if (req.user && req.user.role === 'CASHIER') {
-        query.isActive = true;
-      } else if (activeOnly === 'true') {
-        query.isActive = true;
-      }
+  const storeId = req.storeId;
+  const isPlatformAdmin = req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin);
 
-      if (search) {
-        query.$or = [
-          { name: { $regex: search, $options: 'i' } },
-          { barcode: { $regex: search, $options: 'i' } }
-        ];
-      }
-
-      if (category && category !== 'All') {
-        query.category = category;
-      }
-
-      const skip = (Number(page) - 1) * Number(limit);
-      const total = await Product.countDocuments(query);
-      const products = await Product.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(Number(limit));
-
-      return res.json({
-        success: true,
-        count: products.length,
-        total,
-        page: Number(page),
-        pages: Math.ceil(total / Number(limit)),
-        data: products
-      });
-    } catch (err) {
-      console.warn('MongoDB query fallback to memory products:', err.message);
-    }
+  if (!isPlatformAdmin && !storeId) {
+    return res.json({
+      success: true,
+      count: 0,
+      total: 0,
+      page: Number(page),
+      pages: 0,
+      data: [],
+    });
   }
 
-  // Resilient memory products fallback
-  let list = memoryProducts.filter(p => {
-    if ((req.user && req.user.role === 'CASHIER') || activeOnly === 'true') {
-      if (!p.isActive) return false;
-    }
-    if (category && category !== 'All') {
-      if (p.category.toLowerCase() !== category.toLowerCase()) return false;
-    }
-    if (search) {
-      const q = search.toLowerCase();
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchBarcode = p.barcode.toLowerCase().includes(q);
-      if (!matchName && !matchBarcode) return false;
-    }
-    return true;
-  });
+  let query = {};
+  if (!isPlatformAdmin) {
+    query.store = storeId;
+  }
 
-  const total = list.length;
-  const skip = (Number(page) - 1) * Number(limit);
-  const paged = list.slice(skip, skip + Number(limit));
+  if (req.user && req.user.role === 'CASHIER') {
+    query.isActive = true;
+  } else if (activeOnly === 'true') {
+    query.isActive = true;
+  }
 
-  res.json({
+  if (search && search.trim()) {
+    query.$or = [
+      { name: { $regex: search.trim(), $options: 'i' } },
+      { barcode: { $regex: search.trim(), $options: 'i' } },
+    ];
+  }
+
+  if (category && category !== 'All') {
+    query.category = category;
+  }
+
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.max(1, Number(limit) || 50);
+  const skip = (pageNum - 1) * limitNum;
+
+  const total = await Product.countDocuments(query);
+  const products = await Product.find(query)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limitNum);
+
+  return res.json({
     success: true,
-    count: paged.length,
+    count: products.length,
     total,
-    page: Number(page),
-    pages: Math.ceil(total / Number(limit)) || 1,
-    data: paged
+    page: pageNum,
+    pages: Math.ceil(total / limitNum) || 1,
+    data: products,
   });
 });
 
@@ -102,78 +71,93 @@ const getProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/products/:id
 // @access  Private
 const getProductById = asyncHandler(async (req, res) => {
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const product = await Product.findById(req.params.id);
-      if (product) return res.json({ success: true, data: product });
-    } catch (err) {
-      console.warn('MongoDB getProductById fallback:', err.message);
-    }
-  }
-
-  const product = memoryProducts.find(p => p._id === req.params.id);
+  const product = await Product.findById(req.params.id);
   if (!product) {
     res.status(404);
     throw new Error('Product not found');
   }
-  res.json({ success: true, data: product });
+
+  const isPlatformAdmin = req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin);
+  if (!isPlatformAdmin && product.store?.toString() !== req.storeId) {
+    res.status(403);
+    throw new Error('Unauthorized access to product from another store');
+  }
+
+  return res.json({ success: true, data: product });
 });
 
-// @desc    Get product by barcode
+// @desc    Get product by barcode (scoped to store)
 // @route   GET /api/products/barcode/:barcode
 // @access  Private
 const getProductByBarcode = asyncHandler(async (req, res) => {
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const product = await Product.findOne({ barcode: req.params.barcode, isActive: true });
-      if (product) return res.json({ success: true, data: product });
-    } catch (err) {
-      console.warn('MongoDB getProductByBarcode fallback:', err.message);
-    }
+  const storeId = req.storeId;
+  if (!storeId) {
+    res.status(403);
+    throw new Error('Store context required to scan barcode');
   }
 
-  const product = memoryProducts.find(p => p.barcode === req.params.barcode && p.isActive);
+  const product = await Product.findOne({
+    barcode: req.params.barcode.trim(),
+    store: storeId,
+    isActive: true,
+  });
+
   if (!product) {
     res.status(404);
-    throw new Error('Product not found or inactive');
+    throw new Error('Product not found or inactive in this supermarket');
   }
-  res.json({ success: true, data: product });
+
+  return res.json({ success: true, data: product });
 });
 
-// @desc    Get all categories
+// @desc    Get all distinct categories for store
 // @route   GET /api/products/categories/all
 // @access  Private
 const getCategories = asyncHandler(async (req, res) => {
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const categories = await Product.distinct('category', { isActive: true });
-      return res.json({ success: true, data: categories });
-    } catch (err) {
-      console.warn('MongoDB getCategories fallback:', err.message);
-    }
+  const storeId = req.storeId;
+  const query = { isActive: true };
+  if (storeId) {
+    query.store = storeId;
   }
 
-  const categories = Array.from(new Set(memoryProducts.filter(p => p.isActive).map(p => p.category)));
-  res.json({ success: true, data: categories });
+  const categories = await Product.distinct('category', query);
+  return res.json({ success: true, data: categories });
 });
 
-// @desc    Create product
+// @desc    Create product in current store
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
+  const storeId = req.storeId;
+  if (!storeId) {
+    res.status(403);
+    throw new Error('Store context required to create product');
+  }
+
   const { name, barcode, category, price, stock, lowStockThreshold, image } = req.body;
-  
-  const productExists = await Product.findOne({ barcode });
+
+  const productExists = await Product.findOne({
+    store: storeId,
+    barcode: barcode.trim(),
+  });
+
   if (productExists) {
     res.status(400);
-    throw new Error('Product with this barcode already exists');
+    throw new Error('Product with this barcode already exists in your supermarket');
   }
 
   const product = await Product.create({
-    name, barcode, category, price, stock, lowStockThreshold, image
+    store: storeId,
+    name: name.trim(),
+    barcode: barcode.trim(),
+    category: category.trim(),
+    price,
+    stock: stock || 0,
+    lowStockThreshold: lowStockThreshold !== undefined ? lowStockThreshold : 5,
+    image: image || '',
   });
 
-  res.status(201).json({ success: true, data: product });
+  return res.status(201).json({ success: true, data: product });
 });
 
 // @desc    Update product
@@ -186,23 +170,33 @@ const updateProduct = asyncHandler(async (req, res) => {
     throw new Error('Product not found');
   }
 
-  if (req.body.barcode && req.body.barcode !== product.barcode) {
-    const barcodeExists = await Product.findOne({ barcode: req.body.barcode });
+  const isPlatformAdmin = req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin);
+  if (!isPlatformAdmin && product.store?.toString() !== req.storeId) {
+    res.status(403);
+    throw new Error('Unauthorized access to product from another store');
+  }
+
+  if (req.body.barcode && req.body.barcode.trim() !== product.barcode) {
+    const barcodeExists = await Product.findOne({
+      store: product.store,
+      barcode: req.body.barcode.trim(),
+      _id: { $ne: product._id },
+    });
     if (barcodeExists) {
       res.status(400);
-      throw new Error('Barcode already in use by another product');
+      throw new Error('Barcode already in use by another product in this supermarket');
     }
   }
 
   const updatedProduct = await Product.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
-    runValidators: true
+    runValidators: true,
   });
 
-  res.json({ success: true, data: updatedProduct });
+  return res.json({ success: true, data: updatedProduct });
 });
 
-// @desc    Delete product
+// @desc    Delete product (soft delete)
 // @route   DELETE /api/products/:id
 // @access  Private/Admin
 const deleteProduct = asyncHandler(async (req, res) => {
@@ -212,12 +206,16 @@ const deleteProduct = asyncHandler(async (req, res) => {
     throw new Error('Product not found');
   }
 
-  // Ideally, check if product has sales. If yes, soft delete (isActive = false).
-  // For now, we'll do a soft delete to be safe for inventory history.
+  const isPlatformAdmin = req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin);
+  if (!isPlatformAdmin && product.store?.toString() !== req.storeId) {
+    res.status(403);
+    throw new Error('Unauthorized access to product from another store');
+  }
+
   product.isActive = false;
   await product.save();
 
-  res.json({ success: true, message: 'Product deactivated (soft deleted)' });
+  return res.json({ success: true, message: 'Product deactivated successfully' });
 });
 
 // @desc    Upload product image
@@ -228,9 +226,9 @@ const uploadImage = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('No image file provided');
   }
-  
+
   const imageUrl = `/uploads/${req.file.filename}`;
-  res.json({ success: true, data: imageUrl });
+  return res.json({ success: true, data: imageUrl });
 });
 
 module.exports = {
@@ -242,5 +240,5 @@ module.exports = {
   updateProduct,
   deleteProduct,
   uploadImage,
-  memoryProducts
+  memoryProducts,
 };
