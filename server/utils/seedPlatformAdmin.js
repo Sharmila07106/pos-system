@@ -5,7 +5,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 
-async function seedPlatformAdmin() {
+async function ensurePlatformAdmin() {
   const email = (
     process.env.PLATFORM_ADMIN_EMAIL ||
     process.env.SEED_ADMIN_EMAIL ||
@@ -24,8 +24,45 @@ async function seedPlatformAdmin() {
 
   const role = 'PLATFORM_SUPER_ADMIN';
 
+  let user = await User.findOne({ email });
+  if (!user) {
+    // Check if user previously had the typo email
+    user = await User.findOne({ email: 'sharmia0774@gmail.com' });
+    if (user) {
+      user.email = email;
+    }
+  }
+
+  if (user) {
+    user.name = name;
+    user.role = role;
+    user.isPlatformAdmin = true;
+    user.store = null;
+    user.status = 'Active';
+    user.isActive = true;
+    user.password = password; // pre('save') hook hashes password with bcrypt
+    await user.save();
+    console.log(`✅ Platform Super Admin account verified: "${email}" (${role})`);
+    return user;
+  } else {
+    user = await User.create({
+      name,
+      email,
+      password, // pre('save') hook hashes password with bcrypt
+      role,
+      isPlatformAdmin: true,
+      store: null,
+      status: 'Active',
+      isActive: true,
+    });
+    console.log(`✅ Platform Super Admin account initialized: "${email}" (${role})`);
+    return user;
+  }
+}
+
+async function seedPlatformAdmin() {
   if (!process.env.MONGODB_URI) {
-    console.error('\n❌ MONGODB_URI is not configured.');
+    console.error('\n❌ MONGODB_URI is not configured in server/.env.');
     console.error('Please configure your database connection in server/.env:');
     console.error('Example: MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/storeflow?retryWrites=true&w=majority\n');
     process.exit(1);
@@ -38,43 +75,10 @@ async function seedPlatformAdmin() {
     });
     console.log('✅ Connected to MongoDB successfully.');
 
-    let user = await User.findOne({ email });
-    if (!user) {
-      // Check if user previously had the typo email
-      user = await User.findOne({ email: 'sharmia0774@gmail.com' });
-      if (user) {
-        user.email = email;
-      }
-    }
-    if (user) {
-      user.name = name;
-      user.role = role;
-      user.isPlatformAdmin = true;
-      user.store = null;
-      user.status = 'Active';
-      user.isActive = true;
-      user.password = password; // pre('save') hook hashes password with bcrypt
-      await user.save();
-      console.log(`✅ Updated existing user "${email}" to ${role}.`);
-    } else {
-      user = await User.create({
-        name,
-        email,
-        password, // pre('save') hook hashes password with bcrypt
-        role,
-        isPlatformAdmin: true,
-        store: null,
-        status: 'Active',
-        isActive: true,
-      });
-      console.log(`✅ Created new ${role} account: "${email}".`);
-    }
+    await ensurePlatformAdmin();
 
     await mongoose.disconnect();
-    console.log('🎉 Platform Super Admin bootstrap complete.');
-    console.log(`Email: ${email}`);
-    console.log(`Role: ${role}`);
-    console.log('Password has been securely hashed and stored in MongoDB.\n');
+    console.log('🎉 Platform Super Admin bootstrap complete.\n');
     process.exit(0);
   } catch (err) {
     console.error('❌ Bootstrap failed:', err.message);
@@ -82,4 +86,11 @@ async function seedPlatformAdmin() {
   }
 }
 
-seedPlatformAdmin();
+if (require.main === module) {
+  seedPlatformAdmin();
+}
+
+module.exports = {
+  seedPlatformAdmin,
+  ensurePlatformAdmin,
+};

@@ -86,22 +86,34 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5090;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+async function startServer() {
+  if (process.env.MONGODB_URI) {
+    try {
+      console.log('Connecting to MongoDB...');
+      await mongoose.connect(process.env.MONGODB_URI, {
+        serverSelectionTimeoutMS: 5000,
+      });
+      console.log('✅ MongoDB Connected successfully');
 
-// Connect to MongoDB
-if (process.env.MONGODB_URI) {
-  mongoose
-    .connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-    })
-    .then(() => {
-      console.log('MongoDB Connected successfully');
-    })
-    .catch((err) => {
-      console.error('MongoDB connection error:', err.message);
-    });
-} else {
-  console.warn('⚠️ Notice: MONGODB_URI is not set in server/.env. Configure MONGODB_URI to connect to MongoDB.');
+      // Automatically verify or initialize Platform Super Admin on startup
+      try {
+        const { ensurePlatformAdmin } = require('./utils/seedPlatformAdmin');
+        await ensurePlatformAdmin();
+      } catch (seedErr) {
+        console.warn('⚠️ Platform Admin bootstrap notice:', seedErr.message);
+      }
+    } catch (err) {
+      console.error('❌ MongoDB connection error:', err.message);
+    }
+  } else {
+    console.warn('\n⚠️ [StoreFlow Notice]: MONGODB_URI is not set in server/.env.');
+    console.warn('To connect to MongoDB, open server/.env and paste your connection string:');
+    console.warn('Example: MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/storeflow?retryWrites=true&w=majority\n');
+  }
+
+  app.listen(PORT, () => {
+    console.log(`🚀 StoreFlow POS server running on http://localhost:${PORT}`);
+  });
 }
+
+startServer();
