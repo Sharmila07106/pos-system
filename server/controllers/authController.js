@@ -319,7 +319,7 @@ const loginUser = async (req, res) => {
 
     if (!isPlatformAdminUser && user.store) {
       let storeObj = user.store;
-      if (!storeObj.status && mongoose.Types.ObjectId.isValid(storeObj)) {
+      if (!storeObj.status && mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(storeObj)) {
         storeObj = await Store.findById(storeObj);
       }
       const storeStatus = (storeObj?.status || '').toUpperCase();
@@ -486,7 +486,7 @@ const googleAuth = async (req, res) => {
       // Check store status (pending, rejected, or suspended stores cannot log in)
       if (!isSuperAdminRole && user.store) {
         let storeObj = user.store;
-        if (!storeObj.status && mongoose.Types.ObjectId.isValid(storeObj)) {
+        if (!storeObj.status && mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(storeObj)) {
           storeObj = await Store.findById(storeObj);
         }
         const storeStatus = (storeObj?.status || '').toUpperCase();

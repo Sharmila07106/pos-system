@@ -150,8 +150,9 @@ async function runMultiTenantTestSuite() {
     assert(
       res.statusCode === 201 &&
         res.data?.data?.store?.status === 'PENDING' &&
-        res.data?.data?.user?.role === 'STORE_OWNER',
-      'Public store registration creates STORE_OWNER and PENDING store'
+        (res.data?.data?.user?.role === 'store_admin' || res.data?.data?.user?.role === 'STORE_ADMIN') &&
+        !res.data?.token,
+      'Public store registration creates store_admin and PENDING store without auto-login token'
     );
 
     Store.create = origStoreCreate;
