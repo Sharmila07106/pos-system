@@ -4,6 +4,8 @@ const StoreApplication = require('../models/StoreApplication');
 const Store = require('../models/Store');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+const Complaint = require('../models/Complaint');
+const PlatformSettings = require('../models/PlatformSettings');
 const { memoryApplications } = require('./onboardingController');
 
 // Clean empty fallback arrays (No hardcoded demo stores)
@@ -186,6 +188,16 @@ const reviewApplication = asyncHandler(async (req, res) => {
     await app.save();
   }
 
+  await AuditLog.create({
+    actor: req.user?._id,
+    actorName: reviewerName,
+    actorRole: 'PLATFORM_ADMIN',
+    action: action === 'REJECT' ? 'STORE_REJECTED' : 'CHANGES_REQUESTED',
+    entity: 'StoreApplication',
+    entityId: app.applicationId,
+    details: { reason: reviewNotes },
+  }).catch(() => {});
+
   return res.json({
     success: true,
     message: `Application status updated to ${newStatus}.`,
@@ -193,7 +205,7 @@ const reviewApplication = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get all stores registered on platform
+// @desc    Get all registered stores with owner details
 // @route   GET /api/platform/stores
 // @access  Platform Admin Only
 const getStores = asyncHandler(async (req, res) => {
@@ -284,13 +296,15 @@ const getPlatformStats = asyncHandler(async (req, res) => {
   let activeStores = 0;
   let pendingApplications = 0;
   let totalApplications = 0;
+  let openComplaints = 0;
 
   if (mongoose.connection.readyState === 1) {
     try {
       totalStores = await Store.countDocuments();
       activeStores = await Store.countDocuments({ status: { $in: ['APPROVED', 'ACTIVE'] } });
-      pendingApplications = await Store.countDocuments({ status: 'PENDING' });
-      totalApplications = totalStores;
+      pendingApplications = await StoreApplication.countDocuments({ status: 'PENDING' });
+      totalApplications = await StoreApplication.countDocuments();
+      openComplaints = await Complaint.countDocuments({ status: { $in: ['OPEN', 'IN_PROGRESS'] } });
     } catch (e) {}
   }
 
@@ -301,6 +315,7 @@ const getPlatformStats = asyncHandler(async (req, res) => {
       activeStores,
       pendingApplications,
       totalApplications,
+      openComplaints,
       platformVersion: '2.0.0-multi-tenant',
       systemHealth: 'OPERATIONAL',
     },
@@ -322,6 +337,436 @@ const getAuditLogs = asyncHandler(async (req, res) => {
   return res.json({ success: true, count: memoryAuditLogs.length, data: memoryAuditLogs });
 });
 
+// ============================================================================
+// ANALYTICS & CHARTS ENDPOINTS (Real MongoDB Aggregations)
+// ============================================================================
+
+// @desc    Applications submitted per month (last 6 months)
+// @route   GET /api/platform/analytics/applications-trend
+// @access  Platform Admin Only
+const getApplicationsTrend = asyncHandler(async (req, res) => {
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const results = await StoreApplication.aggregate([
+        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]);
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const data = [];
+
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const label = `${monthNames[m - 1]} ${y}`;
+        const match = results.find((r) => r._id.year === y && r._id.month === m);
+        data.push({
+          month: label,
+          applications: match ? match.count : 0,
+        });
+      }
+
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.warn('MongoDB getApplicationsTrend error:', err.message);
+    }
+  }
+
+  return res.json({ success: true, data: [] });
+});
+
+// @desc    Applications status breakdown
+// @route   GET /api/platform/analytics/status-breakdown
+// @access  Platform Admin Only
+const getStatusBreakdown = asyncHandler(async (req, res) => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const results = await StoreApplication.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]);
+
+      const counts = {
+        PENDING: 0,
+        APPROVED: 0,
+        CHANGES_REQUESTED: 0,
+        REJECTED: 0,
+      };
+
+      let total = 0;
+      results.forEach((r) => {
+        if (counts[r._id] !== undefined) {
+          counts[r._id] = r.count;
+        }
+        total += r.count;
+      });
+
+      const chartData = [
+        { name: 'Pending', value: counts.PENDING, color: '#F59E0B' },
+        { name: 'Approved', value: counts.APPROVED, color: '#0FA38F' },
+        { name: 'Changes Requested', value: counts.CHANGES_REQUESTED, color: '#3B82F6' },
+        { name: 'Rejected', value: counts.REJECTED, color: '#EF4444' },
+      ].filter((item) => item.value > 0);
+
+      return res.json({
+        success: true,
+        data: {
+          breakdown: counts,
+          chartData,
+          total,
+        },
+      });
+    } catch (err) {
+      console.warn('MongoDB getStatusBreakdown error:', err.message);
+    }
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      breakdown: { PENDING: 0, APPROVED: 0, CHANGES_REQUESTED: 0, REJECTED: 0 },
+      chartData: [],
+      total: 0,
+    },
+  });
+});
+
+// @desc    Cumulative registered stores growth per month (last 6 months)
+// @route   GET /api/platform/analytics/stores-growth
+// @access  Platform Admin Only
+const getStoresGrowth = asyncHandler(async (req, res) => {
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const priorStoresCount = await Store.countDocuments({ createdAt: { $lt: sixMonthsAgo } });
+
+      const monthlyAdds = await Store.aggregate([
+        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]);
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const data = [];
+      let runningTotal = priorStoresCount;
+
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        const label = `${monthNames[m - 1]} ${y}`;
+        const match = monthlyAdds.find((r) => r._id.year === y && r._id.month === m);
+        const added = match ? match.count : 0;
+        runningTotal += added;
+        data.push({
+          month: label,
+          newStores: added,
+          totalStores: runningTotal,
+        });
+      }
+
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.warn('MongoDB getStoresGrowth error:', err.message);
+    }
+  }
+
+  return res.json({ success: true, data: [] });
+});
+
+// @desc    Complaints by status summary
+// @route   GET /api/platform/analytics/complaints-summary
+// @access  Platform Admin Only
+const getComplaintsSummary = asyncHandler(async (req, res) => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const results = await Complaint.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]);
+
+      const counts = {
+        OPEN: 0,
+        IN_PROGRESS: 0,
+        RESOLVED: 0,
+        CLOSED: 0,
+      };
+
+      let total = 0;
+      results.forEach((r) => {
+        if (counts[r._id] !== undefined) {
+          counts[r._id] = r.count;
+        }
+        total += r.count;
+      });
+
+      const chartData = [
+        { name: 'Open', value: counts.OPEN, color: '#EF4444' },
+        { name: 'In Progress', value: counts.IN_PROGRESS, color: '#F59E0B' },
+        { name: 'Resolved', value: counts.RESOLVED, color: '#0FA38F' },
+        { name: 'Closed', value: counts.CLOSED, color: '#6B7280' },
+      ].filter((item) => item.value > 0);
+
+      return res.json({
+        success: true,
+        data: {
+          breakdown: counts,
+          chartData,
+          total,
+        },
+      });
+    } catch (err) {
+      console.warn('MongoDB getComplaintsSummary error:', err.message);
+    }
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      breakdown: { OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0, CLOSED: 0 },
+      chartData: [],
+      total: 0,
+    },
+  });
+});
+
+// @desc    Top 5 cities by number of stores
+// @route   GET /api/platform/analytics/stores-by-city
+// @access  Platform Admin Only
+const getStoresByCity = asyncHandler(async (req, res) => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const results = await Store.aggregate([
+        {
+          $group: {
+            _id: { $ifNull: [{ $trim: { input: '$city' } }, 'Unspecified'] },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+      ]);
+
+      const data = results.map((r) => ({
+        city: r._id || 'Unspecified',
+        stores: r.count,
+      }));
+
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.warn('MongoDB getStoresByCity error:', err.message);
+    }
+  }
+
+  return res.json({ success: true, data: [] });
+});
+
+// ============================================================================
+// STAFF, COMPLAINTS & APPEARANCE CONTROLLER METHODS
+// ============================================================================
+
+// @desc    Get all staff across supermarkets with search and store filter
+// @route   GET /api/platform/staff
+// @access  Platform Admin Only
+const getPlatformStaff = asyncHandler(async (req, res) => {
+  const { storeId, role, search } = req.query;
+
+  let query = {};
+  if (storeId && storeId !== 'ALL' && mongoose.Types.ObjectId.isValid(storeId)) {
+    query.store = storeId;
+  }
+  if (role && role !== 'ALL') {
+    query.role = { $regex: new RegExp(`^${role}$`, 'i') };
+  }
+  if (search && search.trim()) {
+    query.$or = [
+      { name: { $regex: search.trim(), $options: 'i' } },
+      { email: { $regex: search.trim(), $options: 'i' } },
+    ];
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const staffUsers = await User.find(query)
+        .populate('store', 'name storeCode city address')
+        .select('-password')
+        .sort({ createdAt: -1 });
+
+      return res.json({
+        success: true,
+        count: staffUsers.length,
+        data: staffUsers,
+      });
+    } catch (err) {
+      console.warn('MongoDB getPlatformStaff error:', err.message);
+    }
+  }
+
+  return res.json({ success: true, count: 0, data: [] });
+});
+
+// @desc    Get all complaints raised by supermarkets
+// @route   GET /api/platform/complaints
+// @access  Platform Admin Only
+const getPlatformComplaints = asyncHandler(async (req, res) => {
+  const { status, storeId } = req.query;
+
+  let query = {};
+  if (status && status !== 'ALL') {
+    query.status = status;
+  }
+  if (storeId && storeId !== 'ALL' && mongoose.Types.ObjectId.isValid(storeId)) {
+    query.store = storeId;
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const complaints = await Complaint.find(query)
+        .populate('store', 'name storeCode phone city')
+        .populate('raisedBy', 'name email role')
+        .populate('assignedTo', 'name email')
+        .sort({ createdAt: -1 });
+
+      return res.json({
+        success: true,
+        count: complaints.length,
+        data: complaints,
+      });
+    } catch (err) {
+      console.warn('MongoDB getPlatformComplaints error:', err.message);
+    }
+  }
+
+  return res.json({ success: true, count: 0, data: [] });
+});
+
+// @desc    Update complaint status
+// @route   PUT /api/platform/complaints/:id/status
+// @access  Platform Admin Only
+const updateComplaintStatus = asyncHandler(async (req, res) => {
+  const { status, note } = req.body;
+  const validStatuses = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+
+  if (!validStatuses.includes(status)) {
+    res.status(400);
+    throw new Error(`Status must be one of: ${validStatuses.join(', ')}`);
+  }
+
+  const complaint = await Complaint.findById(req.params.id);
+  if (!complaint) {
+    res.status(404);
+    throw new Error('Complaint ticket not found');
+  }
+
+  const oldStatus = complaint.status;
+  complaint.status = status;
+
+  if (status === 'RESOLVED' || status === 'CLOSED') {
+    complaint.resolvedAt = new Date();
+  }
+
+  complaint.statusHistory.push({
+    from: oldStatus,
+    to: status,
+    by: req.user?._id,
+    byName: req.user?.name || 'Platform Admin',
+    note: note || `Status updated to ${status}`,
+    at: new Date(),
+  });
+
+  await complaint.save();
+
+  return res.json({
+    success: true,
+    message: `Ticket #${complaint.ticketNo} status updated to ${status}`,
+    data: complaint,
+  });
+});
+
+// @desc    Get appearance accent settings
+// @route   GET /api/platform/appearance
+// @access  Platform Admin Only
+const getAppearance = asyncHandler(async (req, res) => {
+  if (mongoose.connection.readyState === 1) {
+    try {
+      let settings = await PlatformSettings.findOne({ key: 'GLOBAL_PLATFORM_CONFIG' });
+      if (!settings) {
+        settings = await PlatformSettings.create({
+          key: 'GLOBAL_PLATFORM_CONFIG',
+          accentColor: '#0FA38F',
+          presetName: 'Teal Elegance',
+        });
+      }
+      return res.json({ success: true, data: settings });
+    } catch (err) {
+      console.warn('MongoDB getAppearance error:', err.message);
+    }
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      accentColor: '#0FA38F',
+      presetName: 'Teal Elegance',
+    },
+  });
+});
+
+// @desc    Update appearance accent settings
+// @route   PUT /api/platform/appearance
+// @access  Platform Admin Only
+const updateAppearance = asyncHandler(async (req, res) => {
+  const { accentColor, presetName } = req.body;
+
+  if (!accentColor || !/^#[0-9A-Fa-f]{6}$/.test(accentColor)) {
+    res.status(400);
+    throw new Error('Valid 6-digit hex color is required (e.g. #0FA38F)');
+  }
+
+  let settings = await PlatformSettings.findOne({ key: 'GLOBAL_PLATFORM_CONFIG' });
+  if (!settings) {
+    settings = new PlatformSettings({ key: 'GLOBAL_PLATFORM_CONFIG' });
+  }
+
+  settings.accentColor = accentColor;
+  if (presetName) settings.presetName = presetName;
+  settings.updatedBy = req.user?._id;
+  await settings.save();
+
+  return res.json({
+    success: true,
+    message: 'Appearance settings updated successfully',
+    data: settings,
+  });
+});
+
 module.exports = {
   getApplications,
   getApplicationById,
@@ -330,6 +775,16 @@ module.exports = {
   updateStoreStatus,
   getPlatformStats,
   getAuditLogs,
+  getApplicationsTrend,
+  getStatusBreakdown,
+  getStoresGrowth,
+  getComplaintsSummary,
+  getStoresByCity,
+  getPlatformStaff,
+  getPlatformComplaints,
+  updateComplaintStatus,
+  getAppearance,
+  updateAppearance,
   memoryStores,
   memoryAuditLogs,
 };
