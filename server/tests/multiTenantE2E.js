@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const { registerStore, loginUser } = require('../controllers/authController');
+const { registerStore, loginUser, activateStaff, changePassword } = require('../controllers/authController');
 const {
   getOverview,
   getStores,
@@ -28,10 +28,16 @@ const {
   updateStaffLimits,
   revokeInvitation,
 } = require('../controllers/userController');
-const { activateStaff } = require('../controllers/authController');
-const { getProductById } = require('../controllers/productController');
+const { getProductById, createProduct } = require('../controllers/productController');
 const { getDashboardStats } = require('../controllers/dashboardController');
-const { getSales, getSaleById, createSale, refundSale, exportSalesCsv } = require('../controllers/salesController');
+const {
+  getSales,
+  getSaleById,
+  createSale,
+  refundSale,
+  exportSalesCsv,
+  getDailyClosingReport,
+} = require('../controllers/salesController');
 
 const Store = require('../models/Store');
 const User = require('../models/User');
@@ -1215,6 +1221,184 @@ async function runMultiTenantTestSuite() {
 
       Sale.find = origSaleFind;
     }
+  }
+
+  // =========================================================================
+  // SUITE 9: Extra Features (Supplier/Expiry, Daily Closing, Password Change)
+  // =========================================================================
+  console.log('\n--- SUITE 9: Extra Features, Daily Closing & Store Settings ---');
+
+  // Sub-test 9.1: Product creation persists supplier and expiryDate
+  {
+    const origProductFindOne = Product.findOne;
+    const origProductCreate = Product.create;
+
+    Product.findOne = async () => null;
+    let createdProductData = null;
+    Product.create = async (doc) => {
+      createdProductData = doc;
+      return { _id: 'prod_new_1', ...doc };
+    };
+
+    const { req, res } = mockReqRes(
+      {
+        name: 'Organic Milk 1L',
+        barcode: '8901234567890',
+        category: 'Dairy',
+        price: 65,
+        stock: 50,
+        supplier: 'Heritage Foods Ltd',
+        expiryDate: '2026-11-20',
+        lowStockThreshold: 10,
+      },
+      {},
+      {},
+      { _id: 'admin_1', role: 'STORE_ADMIN' },
+      'store_extra_test'
+    );
+
+    await createProduct(req, res);
+
+    assert(
+      res.statusCode === 201 &&
+        createdProductData?.supplier === 'Heritage Foods Ltd' &&
+        createdProductData?.expiryDate instanceof Date &&
+        createdProductData?.expiryDate.toISOString().startsWith('2026-11-20'),
+      'Product creation persists supplier name and expiryDate'
+    );
+
+    Product.findOne = origProductFindOne;
+    Product.create = origProductCreate;
+  }
+
+  // Sub-test 9.2: Daily Closing Z-Report aggregates tender breakdown and net revenue
+  {
+    const origSaleFind = Sale.find;
+    const origStoreFindById = Store.findById;
+
+    Sale.find = async () => [
+      {
+        status: 'COMPLETED',
+        total: 250,
+        subtotal: 238,
+        tax: 12,
+        discount: 0,
+        paymentMethod: 'CASH',
+        items: [{ quantity: 2 }, { quantity: 1 }],
+      },
+      {
+        status: 'COMPLETED',
+        total: 350,
+        subtotal: 330,
+        tax: 20,
+        discount: 10,
+        paymentMethod: 'UPI',
+        items: [{ quantity: 4 }],
+      },
+      {
+        status: 'REFUNDED',
+        total: 50,
+        subtotal: 50,
+        tax: 0,
+        discount: 0,
+        paymentMethod: 'CASH',
+        items: [{ quantity: 1 }],
+      },
+    ];
+
+    Store.findById = async () => ({
+      name: 'StoreFlow Supermarket',
+      address: '123 Market St',
+      gstin: '33AAAAA0000A1Z5',
+    });
+
+    const { req, res } = mockReqRes(
+      {},
+      { date: '2026-10-14' },
+      {},
+      { _id: 'cashier_1', role: 'CASHIER' },
+      'store_closing_test'
+    );
+
+    await getDailyClosingReport(req, res);
+
+    assert(
+      res.statusCode === 200 &&
+        res.data?.data?.totalSalesCount === 2 &&
+        res.data?.data?.grossRevenue === 600 &&
+        res.data?.data?.refundedAmount === 50 &&
+        res.data?.data?.netRevenue === 550 &&
+        res.data?.data?.cashTotal === 250 &&
+        res.data?.data?.upiTotal === 350 &&
+        res.data?.data?.itemsSold === 7,
+      'Daily Closing Z-Report aggregates gross/net revenue, tender breakdown, and refunds'
+    );
+
+    Sale.find = origSaleFind;
+    Store.findById = origStoreFindById;
+  }
+
+  // Sub-test 9.3: Change password enforces minimum length and verifies current password
+  {
+    const origUserFindById = User.findById;
+
+    const mockUser = {
+      _id: 'user_pwd_test',
+      password: 'OldHashedPassword',
+      async matchPassword(pwd) {
+        return pwd === 'CurrentSecret123';
+      },
+      async save() {
+        return this;
+      },
+    };
+
+    User.findById = () => {
+      const p = Promise.resolve(mockUser);
+      p.select = () => Promise.resolve(mockUser);
+      return p;
+    };
+
+    // 9.3a: Wrong current password
+    const { req: wrongReq, res: wrongRes } = mockReqRes(
+      { currentPassword: 'WrongPassword', newPassword: 'NewValidPassword123' },
+      {},
+      {},
+      { _id: 'user_pwd_test' }
+    );
+    await changePassword(wrongReq, wrongRes);
+    assert(
+      wrongRes.statusCode === 401 && wrongRes.data?.message?.includes('Current password does not match'),
+      'Change password fails with 401 when current password does not match'
+    );
+
+    // 9.3b: New password too short (< 8 chars)
+    const { req: shortReq, res: shortRes } = mockReqRes(
+      { currentPassword: 'CurrentSecret123', newPassword: 'short' },
+      {},
+      {},
+      { _id: 'user_pwd_test' }
+    );
+    await changePassword(shortReq, shortRes);
+    assert(
+      shortRes.statusCode === 400 && shortRes.data?.message?.includes('at least 8 characters'),
+      'Change password rejects new password with length less than 8 characters'
+    );
+
+    // 9.3c: Correct password change
+    const { req: validReq, res: validRes } = mockReqRes(
+      { currentPassword: 'CurrentSecret123', newPassword: 'BrandNewPassword123' },
+      {},
+      {},
+      { _id: 'user_pwd_test' }
+    );
+    await changePassword(validReq, validRes);
+    assert(
+      validRes.statusCode === 200 && validRes.data?.message?.includes('Password updated successfully'),
+      'Change password succeeds with 200 when current password matches and new password meets policy'
+    );
+
+    User.findById = origUserFindById;
   }
 
   console.log('\n====================================================');

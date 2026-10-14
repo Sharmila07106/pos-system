@@ -12,6 +12,7 @@ const {
   updatePreferences,
   getInvitationDetails,
   activateStaff,
+  changePassword,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -37,5 +38,6 @@ router.post('/activate-staff', activateStaff);
 router.get('/me', protect, getMe);
 router.get('/preferences', protect, getPreferences);
 router.put('/preferences', protect, updatePreferences);
+router.put('/password', protect, changePassword);
 
 module.exports = router;

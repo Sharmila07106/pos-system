@@ -62,9 +62,16 @@ const updateSettings = asyncHandler(async (req, res) => {
   if (req.body.currency !== undefined) settings.currency = req.body.currency;
   if (req.body.receiptFooter !== undefined) settings.receiptFooter = req.body.receiptFooter;
   if (req.body.lowStockThresholdGlobal !== undefined) settings.lowStockThresholdGlobal = req.body.lowStockThresholdGlobal;
-  if (req.body.allowNegativeStock !== undefined) settings.allowNegativeStock = req.body.allowNegativeStock;
-
   const updatedSettings = await settings.save();
+
+  // Keep Store model in sync for receipt snapshots
+  if (req.body.taxRatePercent !== undefined || req.body.receiptFooter !== undefined) {
+    await Store.findByIdAndUpdate(storeId, {
+      ...(req.body.taxRatePercent !== undefined && { taxRatePercent: req.body.taxRatePercent }),
+      ...(req.body.receiptFooter !== undefined && { receiptFooter: req.body.receiptFooter }),
+    }).catch(() => {});
+  }
+
   return res.json({ success: true, data: updatedSettings });
 });
 

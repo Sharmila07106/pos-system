@@ -6,6 +6,7 @@ const {
   getSaleById,
   refundSale,
   exportSalesCsv,
+  getDailyClosingReport,
 } = require('../controllers/salesController');
 const {
   protect,
@@ -17,6 +18,7 @@ router.use(protect);
 router.use(requireActiveStore);
 
 router.get('/export.csv', exportSalesCsv);
+router.get('/daily-closing', getDailyClosingReport);
 
 router.route('/')
   .post(forbidPlatformAdmin, createSale)

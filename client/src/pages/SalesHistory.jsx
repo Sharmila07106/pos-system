@@ -19,12 +19,180 @@ import {
   AlertTriangle,
   RefreshCw,
   FileSpreadsheet,
+  FileText,
   ChevronDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import GlassCard from '../components/ui/GlassCard';
+
+const DailyClosingModal = ({ isOpen, onClose, date, onDateChange, data, loading, storeDetails }) => {
+  if (!isOpen) return null;
+  const store = data?.store || storeDetails || {};
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1B3A]/70 backdrop-blur-sm overflow-y-auto">
+        <style>{`
+          @media print {
+            body * {
+              visibility: hidden !important;
+            }
+            #zreport-modal-printable, #zreport-modal-printable * {
+              visibility: visible !important;
+            }
+            #zreport-modal-printable {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 80mm !important;
+              margin: 0 !important;
+              padding: 10px !important;
+              background: #fff !important;
+              color: #000 !important;
+              font-size: 11px !important;
+            }
+          }
+        `}</style>
+        <motion.div
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 30, opacity: 0 }}
+          className="bg-white rounded-[24px] shadow-2xl max-w-md w-full p-6 text-[#0B1B3A] my-auto space-y-4 relative"
+        >
+          {/* Header Controls */}
+          <div className="flex items-center justify-between pb-3 border-b border-[#E3E8F0] print:hidden">
+            <div>
+              <h3 className="text-base font-black text-[#0B1B3A]">Daily Closing (Z-Report)</h3>
+              <p className="text-[11px] text-[#8B96AB]">End of day register summary</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-[#F4F7FB] hover:bg-[#E3E8F0] text-[#53607A] flex items-center justify-center transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Date Picker (print hidden) */}
+          <div className="flex items-center gap-2 print:hidden">
+            <label className="text-xs font-bold text-[#53607A]">Report Date:</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => onDateChange(e.target.value)}
+              className="flex-1 px-3 py-1.5 rounded-xl border border-[#CBD5E1] text-xs font-medium focus:ring-2 focus:ring-[#0FA38F] outline-none"
+            />
+          </div>
+
+          {loading ? (
+            <div className="py-12 flex flex-col items-center justify-center text-[#8B96AB] space-y-2">
+              <RefreshCw size={24} className="animate-spin text-[#0FA38F]" />
+              <p className="text-xs">Generating Z-Report...</p>
+            </div>
+          ) : data ? (
+            /* Printable Slip Area */
+            <div
+              id="zreport-modal-printable"
+              className="bg-[#FAFCFF] border border-[#E3E8F0] rounded-xl p-4 font-mono text-xs text-[#0B1B3A] space-y-3"
+            >
+              <div className="text-center space-y-0.5 border-b border-dashed border-[#CBD5E1] pb-2">
+                <h2 className="font-black text-sm tracking-wide">{(store.name || 'FRESHMART SUPERMARKET').toUpperCase()}</h2>
+                {store.address && <p className="text-[10px] text-[#53607A]">{store.address}</p>}
+                {store.gstin && <p className="text-[10px] text-[#53607A]">GSTIN: {store.gstin}</p>}
+                <div className="pt-1 font-bold text-[11px] text-[#0FA38F]">*** DAILY CLOSING (Z-REPORT) ***</div>
+                <div className="text-[10px] text-[#8B96AB]">
+                  Date: {data.date} | Gen: {new Date(data.generatedAt).toLocaleTimeString()}
+                </div>
+              </div>
+
+              {/* Transactions count */}
+              <div className="space-y-1 text-[11px] border-b border-dashed border-[#CBD5E1] pb-2">
+                <div className="flex justify-between">
+                  <span>Completed Bills:</span>
+                  <span className="font-bold">{data.totalSalesCount}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Items Sold:</span>
+                  <span className="font-bold">{data.itemsSold}</span>
+                </div>
+                {data.refundedCount > 0 && (
+                  <div className="flex justify-between text-[#DC2626]">
+                    <span>Refunded/Voided Bills:</span>
+                    <span className="font-bold">{data.refundedCount} (-₹{data.refundedAmount.toFixed(2)})</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Tender Breakdown */}
+              <div className="space-y-1 text-[11px] border-b border-dashed border-[#CBD5E1] pb-2">
+                <div className="font-bold text-[10px] uppercase text-[#8B96AB]">Tender Settlement</div>
+                <div className="flex justify-between">
+                  <span>Cash Drawer:</span>
+                  <span className="tabular-nums font-bold">₹{data.cashTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Card Settlement:</span>
+                  <span className="tabular-nums font-bold">₹{data.cardTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>UPI / QR Code:</span>
+                  <span className="tabular-nums font-bold">₹{data.upiTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Taxes & Deductions */}
+              <div className="space-y-1 text-[11px] border-b border-dashed border-[#CBD5E1] pb-2">
+                <div className="font-bold text-[10px] uppercase text-[#8B96AB]">Taxes & Deductions</div>
+                <div className="flex justify-between">
+                  <span>GST Collected:</span>
+                  <span className="tabular-nums">₹{data.totalTax.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Discounts Given:</span>
+                  <span className="tabular-nums">-₹{data.totalDiscount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Revenue Totals */}
+              <div className="space-y-1 text-xs pt-0.5">
+                <div className="flex justify-between font-bold">
+                  <span>Gross Revenue:</span>
+                  <span className="tabular-nums">₹{data.grossRevenue.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-black text-sm text-[#0FA38F] pt-1 border-t border-dashed border-[#CBD5E1]">
+                  <span>NET REVENUE:</span>
+                  <span className="tabular-nums">₹{data.netRevenue.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="text-center pt-2 text-[9px] text-[#8B96AB] border-t border-dashed border-[#CBD5E1]">
+                StoreFlow Supermarket POS - End of Day Audit
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-[#8B96AB]">
+              No sales data found for the selected date.
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 pt-2 print:hidden">
+            <button
+              onClick={() => window.print()}
+              disabled={loading || !data}
+              className="flex-1 py-2.5 rounded-xl bg-[#0FA38F] hover:bg-[#0B8A78] disabled:opacity-50 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-[0_2px_10px_rgba(15,163,143,0.3)] transition-all"
+            >
+              <Printer size={15} />
+              <span>Print Z-Report</span>
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+};
 
 const ThermalReceiptModal = ({ isOpen, onClose, sale, storeDetails }) => {
   const [receiptWidth, setReceiptWidth] = useState('80mm');
@@ -275,6 +443,37 @@ const SalesHistory = () => {
   const [loading, setLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState(null);
 
+  // Daily Closing (Z-Report) Modal state
+  const [showClosingModal, setShowClosingModal] = useState(false);
+  const [closingDate, setClosingDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [closingData, setClosingData] = useState(null);
+  const [loadingClosing, setLoadingClosing] = useState(false);
+
+  const fetchDailyClosing = async (dateStr) => {
+    setLoadingClosing(true);
+    try {
+      const { data } = await api.get(`/sales/daily-closing?date=${dateStr}`);
+      if (data?.data) {
+        setClosingData(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to generate closing report');
+    } finally {
+      setLoadingClosing(false);
+    }
+  };
+
+  const handleOpenDailyClosing = () => {
+    setShowClosingModal(true);
+    fetchDailyClosing(closingDate);
+  };
+
+  const handleClosingDateChange = (newDate) => {
+    setClosingDate(newDate);
+    fetchDailyClosing(newDate);
+  };
+
   // Filters
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('ALL'); // 'ALL', 'TODAY', 'YESTERDAY', 'WEEK', 'MONTH', 'CUSTOM'
@@ -411,6 +610,17 @@ const SalesHistory = () => {
         storeDetails={user?.store}
       />
 
+      {/* Daily Closing (Z-Report) Modal */}
+      <DailyClosingModal
+        isOpen={showClosingModal}
+        onClose={() => setShowClosingModal(false)}
+        date={closingDate}
+        onDateChange={handleClosingDateChange}
+        data={closingData}
+        loading={loadingClosing}
+        storeDetails={user?.store}
+      />
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -424,15 +634,26 @@ const SalesHistory = () => {
           </p>
         </div>
 
-        {isStoreAdmin && (
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <button
-            onClick={handleExportCsv}
-            className="px-4 py-2.5 rounded-xl bg-[#0B1B3A] hover:bg-[#12274F] text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all self-start sm:self-auto"
+            onClick={handleOpenDailyClosing}
+            className="px-4 py-2.5 rounded-xl border border-[#CBD5E1] bg-white hover:bg-[#F4F7FB] text-[#0B1B3A] text-xs font-bold flex items-center gap-2 shadow-xs transition-all"
+            title="Generate End of Day Z-Report"
           >
-            <FileSpreadsheet size={16} />
-            <span>Export CSV</span>
+            <FileText size={16} className="text-[#0FA38F]" />
+            <span>Daily Closing (Z-Report)</span>
           </button>
-        )}
+
+          {isStoreAdmin && (
+            <button
+              onClick={handleExportCsv}
+              className="px-4 py-2.5 rounded-xl bg-[#0B1B3A] hover:bg-[#12274F] text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all"
+            >
+              <FileSpreadsheet size={16} />
+              <span>Export CSV</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Top Filtered KPI Summary Cards */}

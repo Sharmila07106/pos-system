@@ -92,6 +92,57 @@ const POS = () => {
   const [todayBills, setTodayBills] = useState([]);
   const [loadingBills, setLoadingBills] = useState(false);
 
+  // Held Bills State (Hold & Resume queue)
+  const [heldBills, setHeldBills] = useState(() => {
+    try {
+      const saved = localStorage.getItem('storeflow_pos_held_bills');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showHeldBillsModal, setShowHeldBillsModal] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('storeflow_pos_held_bills', JSON.stringify(heldBills));
+    } catch (_) {}
+  }, [heldBills]);
+
+  const handleHoldBill = () => {
+    if (cart.length === 0) return toast.error('Cart is empty. Nothing to hold.');
+    const newHeld = {
+      id: `hold-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      cart: [...cart],
+      discountType,
+      discountValue,
+      itemCount: cart.reduce((s, it) => s + it.qty, 0),
+      subtotal: cart.reduce((s, it) => s + it.price * it.qty, 0),
+    };
+    setHeldBills((prev) => [newHeld, ...prev]);
+    setCart([]);
+    setDiscountValue('');
+    toast.success('Bill held. Register ready for the next customer.');
+  };
+
+  const handleResumeBill = (held) => {
+    if (cart.length > 0) {
+      if (!window.confirm('Current cart is not empty. Replacing it with this held bill?')) return;
+    }
+    setCart(held.cart);
+    setDiscountType(held.discountType || 'FLAT');
+    setDiscountValue(held.discountValue || '');
+    setHeldBills((prev) => prev.filter((h) => h.id !== held.id));
+    setShowHeldBillsModal(false);
+    toast.success('Held bill resumed!');
+  };
+
+  const handleDiscardHeldBill = (heldId) => {
+    setHeldBills((prev) => prev.filter((h) => h.id !== heldId));
+    toast('Held bill discarded', { icon: '🗑️' });
+  };
+
   // Void / Admin Approval Modal State
   const [billToVoid, setBillToVoid] = useState(null);
   const [adminEmail, setAdminEmail] = useState('');
@@ -218,6 +269,17 @@ const POS = () => {
         setActiveTab('terminal');
         focusSearch();
       }
+      // F4: Hold Current Bill or View Held Bills
+      else if (e.key === 'F4') {
+        e.preventDefault();
+        if (cart.length > 0) {
+          handleHoldBill();
+        } else if (heldBills.length > 0) {
+          setShowHeldBillsModal((prev) => !prev);
+        } else {
+          toast('No items to hold or held bills to resume', { icon: 'ℹ️' });
+        }
+      }
       // F8: Clear Cart
       else if (e.key === 'F8') {
         e.preventDefault();
@@ -240,6 +302,9 @@ const POS = () => {
         if (receiptData) {
           setReceiptData(null);
           setShowConfetti(false);
+          focusSearch();
+        } else if (showHeldBillsModal) {
+          setShowHeldBillsModal(false);
           focusSearch();
         } else if (showTenderModal) {
           setShowTenderModal(false);
@@ -702,6 +767,18 @@ const POS = () => {
 
         {/* Offline / Online Status Pill & Sync Action */}
         <div className="flex items-center gap-2.5 self-end sm:self-center">
+          {heldBills.length > 0 && (
+            <button
+              onClick={() => setShowHeldBillsModal(true)}
+              className="px-3 py-1.5 rounded-xl bg-[#E0F2FE] border border-[#0284C7]/30 text-[#0284C7] hover:bg-[#BAE6FD] text-xs font-extrabold flex items-center gap-1.5 transition-colors shadow-xs"
+              title="View held bills [F4]"
+            >
+              <Clock size={13} />
+              <span>{heldBills.length} Held Bill{heldBills.length === 1 ? '' : 's'}</span>
+              <span className="text-[10px] font-mono px-1 py-0.2 rounded bg-white text-[#0284C7]">F4</span>
+            </button>
+          )}
+
           {offlineQueue.length > 0 && (
             <button
               onClick={handleSyncOfflineSales}
@@ -947,19 +1024,29 @@ const POS = () => {
               </div>
               
               {cart.length > 0 && (
-                <button
-                  onClick={() => {
-                    setCart([]);
-                    setDiscountValue('');
-                    toast('Cart cleared', { icon: '🗑️' });
-                    focusSearch();
-                  }}
-                  className="text-xs font-bold text-[#E5484D] hover:text-[#DC2626] hover:bg-[#FEE2E2]/60 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                  title="Clear Cart [F8]"
-                >
-                  <Trash2 size={13} />
-                  <span>Clear (F8)</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleHoldBill}
+                    className="text-xs font-bold text-[#D97706] hover:text-[#B45309] hover:bg-[#FFF1E3] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 border border-[#FF8A1F]/30"
+                    title="Hold current order [F4]"
+                  >
+                    <Clock size={13} />
+                    <span>Hold (F4)</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCart([]);
+                      setDiscountValue('');
+                      toast('Cart cleared', { icon: '🗑️' });
+                      focusSearch();
+                    }}
+                    className="text-xs font-bold text-[#E5484D] hover:text-[#DC2626] hover:bg-[#FEE2E2]/60 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    title="Clear Cart [F8]"
+                  >
+                    <Trash2 size={13} />
+                    <span>Clear (F8)</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1682,6 +1769,102 @@ const POS = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================== */}
+      {/* HELD BILLS MODAL (Hold & Resume queue)                     */}
+      {/* ========================================================== */}
+      <AnimatePresence>
+        {showHeldBillsModal && (
+          <div className="fixed inset-0 z-50 bg-[#0B1B3A]/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[24px] shadow-2xl max-w-lg w-full p-6 text-[#0B1B3A] space-y-4 relative"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-[#E3E8F0]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-[#E0F2FE] text-[#0284C7] flex items-center justify-center">
+                    <Clock size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-[#0B1B3A]">Held Customer Bills</h3>
+                    <p className="text-xs text-[#8B96AB]">
+                      {heldBills.length} held order{heldBills.length === 1 ? '' : 's'} waiting to resume
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowHeldBillsModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-[#F4F7FB] text-[#8B96AB] transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {heldBills.length === 0 ? (
+                <div className="py-12 text-center text-[#8B96AB]">
+                  <Clock size={36} className="mx-auto mb-2 text-[#CBD5E1]" />
+                  <p className="font-bold text-sm text-[#53607A]">No held bills</p>
+                  <p className="text-xs text-[#8B96AB] mt-0.5">Use Hold (F4) in the cart to hold an order</p>
+                </div>
+              ) : (
+                <div className="max-h-[320px] overflow-y-auto space-y-2.5 divide-y divide-[#EEF2F8]/60">
+                  {heldBills.map((held) => (
+                    <div key={held.id} className="pt-2.5 first:pt-0 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-xs text-[#0B1B3A]">
+                            {held.itemCount} items
+                          </span>
+                          <span className="text-[10px] text-[#8B96AB]">
+                            Held at {new Date(held.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="text-xs text-[#53607A] truncate max-w-[240px] mt-0.5">
+                          {held.cart.map((it) => `${it.qty}x ${it.name}`).join(', ')}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          <span className="text-xs font-black text-[#0FA38F] tabular-nums">
+                            ₹{(held.subtotal || 0).toFixed(2)}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => handleResumeBill(held)}
+                          className="px-3 py-1.5 rounded-xl bg-[#0FA38F] hover:bg-[#0B8A78] text-white font-extrabold text-xs transition-colors shadow-xs"
+                        >
+                          Resume
+                        </button>
+                        <button
+                          onClick={() => handleDiscardHeldBill(held.id)}
+                          className="p-1.5 rounded-xl hover:bg-[#FEE2E2] text-[#8B96AB] hover:text-[#E5484D] transition-colors"
+                          title="Discard held bill"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={() => setShowHeldBillsModal(false)}
+                  className="px-4 py-2 rounded-xl border border-[#E3E8F0] font-bold text-xs text-[#53607A] hover:bg-[#F4F7FB]"
+                >
+                  Close (Esc)
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

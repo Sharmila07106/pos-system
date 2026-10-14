@@ -134,7 +134,19 @@ const createProduct = asyncHandler(async (req, res) => {
     throw new Error('Store context required to create product');
   }
 
-  const { name, barcode, category, price, stock, lowStockThreshold, image } = req.body;
+  const {
+    name,
+    barcode,
+    category,
+    price,
+    stock,
+    lowStockThreshold,
+    image,
+    supplier,
+    expiryDate,
+    sku,
+    costPrice,
+  } = req.body;
 
   const productExists = await Product.findOne({
     store: storeId,
@@ -154,6 +166,10 @@ const createProduct = asyncHandler(async (req, res) => {
     price,
     stock: stock || 0,
     lowStockThreshold: lowStockThreshold !== undefined ? lowStockThreshold : 5,
+    supplier: supplier ? supplier.trim() : '',
+    expiryDate: expiryDate ? new Date(expiryDate) : null,
+    sku: sku ? sku.trim() : '',
+    costPrice: costPrice !== undefined ? Number(costPrice) : 0,
     image: image || '',
   });
 

@@ -600,11 +600,92 @@ const exportSalesCsv = asyncHandler(async (req, res) => {
   return res.status(200).send(csvContent);
 });
 
+// @desc    Get Daily Closing Summary (Z-Report)
+// @route   GET /api/sales/daily-closing
+// @access  Private (Store Staff Only)
+const getDailyClosingReport = asyncHandler(async (req, res) => {
+  const storeId = req.storeId;
+  if (!storeId) {
+    return res.status(400).json({ success: false, message: 'Store context required' });
+  }
+
+  const { date } = req.query;
+  const targetDate = date ? new Date(date) : new Date();
+  const startOfDay = new Date(targetDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(targetDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const query = {
+    store: storeId,
+    createdAt: { $gte: startOfDay, $lte: endOfDay },
+  };
+
+  const sales = await Sale.find(query);
+
+  let cashTotal = 0;
+  let cardTotal = 0;
+  let upiTotal = 0;
+  let totalTax = 0;
+  let totalDiscount = 0;
+  let totalRevenue = 0;
+  let itemsSold = 0;
+  let completedCount = 0;
+  let refundedCount = 0;
+  let refundedAmount = 0;
+
+  for (const s of sales) {
+    if (s.status === 'COMPLETED') {
+      completedCount++;
+      totalRevenue += s.total || 0;
+      totalTax += s.tax || 0;
+      totalDiscount += s.discount || 0;
+      if (s.paymentMethod === 'CASH') cashTotal += s.total || 0;
+      else if (s.paymentMethod === 'CARD') cardTotal += s.total || 0;
+      else if (s.paymentMethod === 'UPI') upiTotal += s.total || 0;
+      for (const item of s.items || []) {
+        itemsSold += item.quantity || item.qty || 1;
+      }
+    } else if (s.status === 'REFUNDED') {
+      refundedCount++;
+      refundedAmount += s.total || 0;
+    }
+  }
+
+  let storeDoc = null;
+  if (mongoose.Types.ObjectId.isValid(storeId)) {
+    storeDoc = await Store.findById(storeId).catch(() => null);
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      date: startOfDay.toISOString().split('T')[0],
+      store: storeDoc
+        ? { name: storeDoc.name, address: storeDoc.address, gstin: storeDoc.gstin }
+        : {},
+      totalSalesCount: completedCount,
+      refundedCount,
+      refundedAmount: Number(refundedAmount.toFixed(2)),
+      grossRevenue: Number(totalRevenue.toFixed(2)),
+      netRevenue: Number((totalRevenue - refundedAmount).toFixed(2)),
+      cashTotal: Number(cashTotal.toFixed(2)),
+      cardTotal: Number(cardTotal.toFixed(2)),
+      upiTotal: Number(upiTotal.toFixed(2)),
+      totalTax: Number(totalTax.toFixed(2)),
+      totalDiscount: Number(totalDiscount.toFixed(2)),
+      itemsSold,
+      generatedAt: new Date().toISOString(),
+    },
+  });
+});
+
 module.exports = {
   createSale,
   getSales,
   getSaleById,
   refundSale,
   exportSalesCsv,
+  getDailyClosingReport,
   memorySales,
 };

@@ -50,6 +50,15 @@ const productSchema = new mongoose.Schema(
       default: 5,
       min: 0,
     },
+    supplier: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    expiryDate: {
+      type: Date,
+      default: null,
+    },
     image: {
       type: String,
       default: '',
