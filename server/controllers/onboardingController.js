@@ -4,46 +4,8 @@ const StoreApplication = require('../models/StoreApplication');
 const Store = require('../models/Store');
 const AuditLog = require('../models/AuditLog');
 
-// In-memory store applications fallback for offline/development mode
-const memoryApplications = [
-  {
-    _id: 'app_demo_01',
-    applicationId: 'APP-10001',
-    businessName: 'GreenMart Organics',
-    ownerName: 'Venkatesh Rao',
-    email: 'owner@greenmart.com',
-    phone: '+91 98401 23456',
-    address: '45, Anna Salai, T. Nagar',
-    city: 'Chennai',
-    storeType: 'Supermarket',
-    storeSize: 'Medium (1000-3000 sq ft)',
-    branchesCount: 2,
-    registrationNumber: 'GSTIN33AAACG1234F1Z5',
-    status: 'PENDING',
-    reviewNotes: '',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-  {
-    _id: 'app_demo_02',
-    applicationId: 'APP-10002',
-    businessName: 'FreshBasket Hypermarket',
-    ownerName: 'Ananya Sharma',
-    email: 'ananya@freshbasket.in',
-    phone: '+91 98840 98765',
-    address: '12, OMR IT Highway, Perungudi',
-    city: 'Chennai',
-    storeType: 'Hypermarket',
-    storeSize: 'Large (>3000 sq ft)',
-    branchesCount: 1,
-    registrationNumber: 'GSTIN33AABCF9876K1Z9',
-    status: 'APPROVED',
-    reviewNotes: 'Verified supermarket registration and authorized owner identity.',
-    reviewedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    createdAt: new Date(Date.now() - 3600000 * 48).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-  }
-];
+// Empty in-memory fallback array (No mock applications)
+const memoryApplications = [];
 
 // Helper to generate unique application ID
 const generateApplicationId = () => {
