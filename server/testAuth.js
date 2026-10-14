@@ -1,5 +1,5 @@
 const User = require('./models/User');
-const { registerUser, loginUser } = require('./controllers/authController');
+const { registerUser, loginUser, googleAuth } = require('./controllers/authController');
 
 async function runAuthTests() {
   console.log('====================================================');
@@ -153,6 +153,44 @@ async function runAuthTests() {
       res.statusCode === 401 &&
       res.data?.message === 'Invalid email or password',
       'Login with wrong password returns 401 "Invalid email or password"'
+    );
+  }
+
+  // TEST 10: PLATFORM_SUPER_ADMIN login returns isPlatformAdmin: true
+  {
+    mockDB.push({
+      _id: 'super_admin_mock_id',
+      name: 'Super Admin',
+      email: 'sharmia0774@gmail.com',
+      password: 'hashed_password',
+      role: 'PLATFORM_SUPER_ADMIN',
+      status: 'Active',
+      createdAt: new Date(),
+      matchPassword: async (pwd) => pwd === '12345678',
+    });
+
+    const { req, res } = mockReqRes({
+      email: 'sharmia0774@gmail.com',
+      password: '12345678'
+    });
+    await loginUser(req, res);
+    assert(
+      res.statusCode === 200 &&
+      res.data?.success === true &&
+      res.data?.data?.role === 'PLATFORM_SUPER_ADMIN' &&
+      res.data?.data?.isPlatformAdmin === true,
+      'PLATFORM_SUPER_ADMIN login correctly sets isPlatformAdmin: true'
+    );
+  }
+
+  // TEST 11: googleAuth rejects missing credential with 400
+  {
+    const { req, res } = mockReqRes({});
+    await googleAuth(req, res);
+    assert(
+      res.statusCode === 400 &&
+      res.data?.message?.includes('credential ID token is required'),
+      'googleAuth returns 400 when credential ID token is missing'
     );
   }
 
