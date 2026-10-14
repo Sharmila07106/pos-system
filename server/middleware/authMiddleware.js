@@ -18,41 +18,47 @@ const protect = async (req, res, next) => {
         process.env.JWT_SECRET || 'storeflow-pos-secret-key-2026'
       );
 
-      let user = null;
-
-      if (mongoose.connection.readyState === 1) {
-        user = await User.findById(decoded.id).select('-password').populate('store');
+      if (!decoded?.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token payload',
+        });
       }
 
-      // Memory fallback if MongoDB not connected
-      if (!user) {
-        user = {
-          _id: decoded.id || 'usr_demo_admin',
-          name: decoded.name || 'Store Admin',
-          email: decoded.email || 'admin@storeflow.com',
-          role: decoded.role || 'STORE_OWNER',
-          isPlatformAdmin: decoded.isPlatformAdmin || decoded.role === 'PLATFORM_ADMIN',
-          status: 'Active',
-          store: decoded.storeId || 'store_demo_freshmart'
-        };
+      let user = null;
+      if (mongoose.connection.readyState === 1) {
+        user = await User.findById(decoded.id).select('-password').populate('store');
       }
 
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: 'User belonging to this token no longer exists',
+          message: 'User belonging to this token no longer exists in database',
         });
       }
 
-      if (user.status === 'Disabled') {
+      if (user.isActive === false || user.status === 'Disabled') {
         return res.status(403).json({
           success: false,
-          message: 'Your account has been disabled. Contact store administrator.',
+          message: 'Your account has been deactivated. Please contact your administrator.',
         });
+      }
+
+      // Throttled lastActiveAt update (at most once every 60 seconds)
+      const now = Date.now();
+      const lastActive = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+      if (now - lastActive > 60000) {
+        User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date(now) } })
+          .exec()
+          .catch(() => {});
       }
 
       req.user = user;
-      req.storeId = user.store?._id ? user.store._id.toString() : (user.store ? user.store.toString() : null);
+      req.storeId = user.store?._id
+        ? user.store._id.toString()
+        : user.store
+        ? user.store.toString()
+        : null;
 
       return next();
     } catch (error) {
@@ -72,6 +78,45 @@ const protect = async (req, res, next) => {
   }
 };
 
+// Strict Platform Administrator only
+const platformAdminOnly = (req, res, next) => {
+  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin === true)) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied: StoreFlow Platform Administrator privileges required',
+  });
+};
+
+// Forbid Platform Admin from executing checkout / POS sales
+const forbidPlatformAdmin = (req, res, next) => {
+  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin === true)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Platform administrators cannot perform direct store checkout or sales operations.',
+    });
+  }
+  return next();
+};
+
+// Store Owner or Store Administrator only
+const storeOwnerOnly = (req, res, next) => {
+  if (
+    req.user &&
+    (req.user.role === 'STORE_OWNER' ||
+      req.user.role === 'ADMIN' ||
+      req.user.role === 'PLATFORM_ADMIN' ||
+      req.user.isPlatformAdmin)
+  ) {
+    return next();
+  }
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied: Supermarket Owner or Store Administrator privileges required',
+  });
+};
+
 // Flexible role checker middleware
 const requireRole = (...allowedRoles) => {
   return (req, res, next) => {
@@ -82,14 +127,14 @@ const requireRole = (...allowedRoles) => {
       });
     }
 
-    // Platform admin always has access
+    // Platform admin has broad administrative access across general management endpoints
     if (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin) {
       return next();
     }
 
-    // Allow role synonym: ADMIN and STORE_OWNER are treated as equivalent store authority
     const userRole = req.user.role;
-    const hasRole = allowedRoles.includes(userRole) || 
+    const hasRole =
+      allowedRoles.includes(userRole) ||
       (allowedRoles.includes('ADMIN') && userRole === 'STORE_OWNER') ||
       (allowedRoles.includes('STORE_OWNER') && userRole === 'ADMIN');
 
@@ -104,31 +149,14 @@ const requireRole = (...allowedRoles) => {
   };
 };
 
-// Platform Administrator only
-const platformAdminOnly = (req, res, next) => {
-  if (req.user && (req.user.role === 'PLATFORM_ADMIN' || req.user.isPlatformAdmin || req.user.role === 'ADMIN')) {
-    return next();
-  }
-  return res.status(403).json({
-    success: false,
-    message: 'Access denied: StoreFlow Platform Administrator privileges required',
-  });
-};
-
-// Store Owner or Store Administrator only
-const storeOwnerOnly = (req, res, next) => {
-  if (req.user && (req.user.role === 'STORE_OWNER' || req.user.role === 'ADMIN' || req.user.isPlatformAdmin)) {
-    return next();
-  }
-  return res.status(403).json({
-    success: false,
-    message: 'Access denied: Supermarket Owner or Store Administrator privileges required',
-  });
-};
-
 // Legacy adminOnly backward compatibility
 const adminOnly = (req, res, next) => {
-  if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'STORE_OWNER' || req.user.role === 'PLATFORM_ADMIN')) {
+  if (
+    req.user &&
+    (req.user.role === 'ADMIN' ||
+      req.user.role === 'STORE_OWNER' ||
+      req.user.role === 'PLATFORM_ADMIN')
+  ) {
     return next();
   }
   return res.status(403).json({
@@ -151,29 +179,47 @@ const requireActiveStore = async (req, res, next) => {
     });
   }
 
-  // Check store status in MongoDB if active
-  if (mongoose.connection.readyState === 1 && req.user.store && req.user.store.status) {
-    if (req.user.store.status === 'SUSPENDED') {
+  // Check store status in MongoDB
+  const store = req.user.store;
+  if (store && store.status) {
+    if (store.status === 'SUSPENDED') {
       return res.status(403).json({
         success: false,
+        code: 'STORE_SUSPENDED',
         message: 'Operational access is suspended for this supermarket. Please contact StoreFlow Platform Admin.',
       });
     }
-    if (req.user.store.status === 'PENDING') {
+    if (store.status === 'PENDING') {
       return res.status(403).json({
         success: false,
+        code: 'STORE_PENDING',
         message: 'Your supermarket registration application is pending review and approval.',
+      });
+    }
+    if (store.status === 'REJECTED') {
+      return res.status(403).json({
+        success: false,
+        code: 'STORE_REJECTED',
+        message: 'Your supermarket registration application has been rejected.',
+      });
+    }
+    if (store.status !== 'ACTIVE') {
+      return res.status(403).json({
+        success: false,
+        code: 'STORE_INACTIVE',
+        message: 'Supermarket is not currently active.',
       });
     }
   }
 
-  next();
+  return next();
 };
 
 module.exports = {
   protect,
   requireRole,
   platformAdminOnly,
+  forbidPlatformAdmin,
   storeOwnerOnly,
   adminOnly,
   requireActiveStore,
