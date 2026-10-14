@@ -114,7 +114,9 @@ const forbidPlatformAdmin = (req, res, next) => {
 const storeOwnerOnly = (req, res, next) => {
   if (
     req.user &&
-    (req.user.role === 'STORE_OWNER' ||
+    (req.user.role === 'STORE_ADMIN' ||
+      req.user.role === 'store_admin' ||
+      req.user.role === 'STORE_OWNER' ||
       req.user.role === 'ADMIN' ||
       isPlatformSuperAdmin(req.user))
   ) {
@@ -142,12 +144,23 @@ const requireRole = (...allowedRoles) => {
     }
 
     const userRole = req.user.role;
-    const hasRole =
-      allowedRoles.includes(userRole) ||
-      (allowedRoles.includes('ADMIN') && userRole === 'STORE_OWNER') ||
-      (allowedRoles.includes('STORE_OWNER') && userRole === 'ADMIN');
+    const normalizedRole = (userRole || '').toUpperCase();
+    const normalizedAllowed = allowedRoles.map((r) => r.toUpperCase());
 
-    if (hasRole) {
+    const isStoreAdminRole =
+      normalizedRole === 'STORE_ADMIN' ||
+      normalizedRole === 'STORE_OWNER' ||
+      normalizedRole === 'ADMIN';
+
+    const wantsStoreAdmin =
+      normalizedAllowed.includes('STORE_ADMIN') ||
+      normalizedAllowed.includes('STORE_OWNER') ||
+      normalizedAllowed.includes('ADMIN');
+
+    if (
+      normalizedAllowed.includes(normalizedRole) ||
+      (wantsStoreAdmin && isStoreAdminRole)
+    ) {
       return next();
     }
 
@@ -162,7 +175,9 @@ const requireRole = (...allowedRoles) => {
 const adminOnly = (req, res, next) => {
   if (
     req.user &&
-    (req.user.role === 'ADMIN' ||
+    (req.user.role === 'STORE_ADMIN' ||
+      req.user.role === 'store_admin' ||
+      req.user.role === 'ADMIN' ||
       req.user.role === 'STORE_OWNER' ||
       isPlatformSuperAdmin(req.user))
   ) {
