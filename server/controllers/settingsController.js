@@ -1,35 +1,71 @@
 const Settings = require('../models/Settings');
+const Store = require('../models/Store');
 const asyncHandler = require('express-async-handler');
 
-// @desc    Get settings
+// @desc    Get store settings
 // @route   GET /api/settings
 // @access  Private
 const getSettings = asyncHandler(async (req, res) => {
-  let settings = await Settings.findOne();
-  if (!settings) {
-    settings = await Settings.create({});
+  const storeId = req.storeId || req.user.store?._id || req.user.store;
+
+  if (!storeId) {
+    return res.json({
+      success: true,
+      data: {
+        storeName: 'StoreFlow POS',
+        address: '',
+        phone: '',
+        taxRatePercent: 5,
+        currency: 'INR',
+        receiptFooter: 'Thank you for shopping with us!',
+      },
+    });
   }
-  res.json({ success: true, data: settings });
+
+  let settings = await Settings.findOne({ store: storeId });
+  if (!settings) {
+    const store = await Store.findById(storeId);
+    settings = await Settings.create({
+      store: storeId,
+      storeName: store?.name || 'Supermarket Store',
+      address: store?.address || '',
+      phone: store?.phone || '',
+      taxRatePercent: 5,
+      currency: 'INR',
+      receiptFooter: `Thank you for shopping at ${store?.name || 'our store'}!`,
+    });
+  }
+
+  return res.json({ success: true, data: settings });
 });
 
-// @desc    Update settings
+// @desc    Update store settings
 // @route   PUT /api/settings
-// @access  Private/Admin
+// @access  Private (Store Owner / Admin Only)
 const updateSettings = asyncHandler(async (req, res) => {
-  let settings = await Settings.findOne();
-  if (!settings) {
-    settings = await Settings.create({});
+  const storeId = req.storeId || req.user.store?._id || req.user.store;
+
+  if (!storeId) {
+    res.status(403);
+    throw new Error('Supermarket store context required to update settings');
   }
-  
-  settings.storeName = req.body.storeName || settings.storeName;
-  settings.address = req.body.address || settings.address;
-  settings.phone = req.body.phone || settings.phone;
-  settings.taxRatePercent = req.body.taxRatePercent !== undefined ? req.body.taxRatePercent : settings.taxRatePercent;
-  settings.currency = req.body.currency || settings.currency;
-  settings.receiptFooter = req.body.receiptFooter || settings.receiptFooter;
-  
+
+  let settings = await Settings.findOne({ store: storeId });
+  if (!settings) {
+    settings = new Settings({ store: storeId });
+  }
+
+  if (req.body.storeName !== undefined) settings.storeName = req.body.storeName;
+  if (req.body.address !== undefined) settings.address = req.body.address;
+  if (req.body.phone !== undefined) settings.phone = req.body.phone;
+  if (req.body.taxRatePercent !== undefined) settings.taxRatePercent = req.body.taxRatePercent;
+  if (req.body.currency !== undefined) settings.currency = req.body.currency;
+  if (req.body.receiptFooter !== undefined) settings.receiptFooter = req.body.receiptFooter;
+  if (req.body.lowStockThresholdGlobal !== undefined) settings.lowStockThresholdGlobal = req.body.lowStockThresholdGlobal;
+  if (req.body.allowNegativeStock !== undefined) settings.allowNegativeStock = req.body.allowNegativeStock;
+
   const updatedSettings = await settings.save();
-  res.json({ success: true, data: updatedSettings });
+  return res.json({ success: true, data: updatedSettings });
 });
 
 module.exports = { getSettings, updateSettings };
