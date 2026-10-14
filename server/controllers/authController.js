@@ -118,6 +118,8 @@ const registerStore = async (req, res) => {
     const newStore = await Store.create({
       name: storeName.trim(),
       storeCode,
+      email: cleanEmail,
+      businessEmail: cleanEmail,
       phone: phone ? phone.trim() : '',
       address: address ? address.trim() : '',
       city: city ? city.trim() : '',

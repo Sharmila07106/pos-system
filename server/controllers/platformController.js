@@ -128,17 +128,21 @@ const reviewApplication = asyncHandler(async (req, res) => {
         await owner.save();
       }
 
+      const storeEmail = app.email || app.businessEmail || (owner && owner.email) || '';
+      const storePhone = app.phone || (owner && owner.phone) || '';
+
       const store = await Store.create({
         name: app.businessName,
         slug: `${slug}-${Math.floor(100 + Math.random() * 900)}`,
         storeCode,
         owner: owner._id,
         ownerUser: owner._id,
-        businessEmail: app.email,
-        phone: app.phone,
-        address: app.address,
-        city: app.city,
-        storeType: app.storeType,
+        email: storeEmail,
+        businessEmail: storeEmail,
+        phone: storePhone,
+        address: app.address || '',
+        city: app.city || '',
+        storeType: app.storeType || 'Supermarket',
         status: 'ACTIVE',
         reviewedAt: new Date(),
         reviewedBy: req.user?._id,

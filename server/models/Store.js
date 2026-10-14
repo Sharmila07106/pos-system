@@ -24,17 +24,17 @@ const storeSchema = new mongoose.Schema(
     ownerUser: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Store owner user is required'],
+      required: false,
       index: true,
     },
     address: {
       type: String,
-      required: [true, 'Store address is required'],
+      default: '',
       trim: true,
     },
     city: {
       type: String,
-      required: [true, 'City is required'],
+      default: '',
       trim: true,
     },
     state: {
@@ -49,12 +49,18 @@ const storeSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Contact phone is required'],
+      default: '',
       trim: true,
     },
     email: {
       type: String,
-      required: [true, 'Business email is required'],
+      default: '',
+      trim: true,
+      lowercase: true,
+    },
+    businessEmail: {
+      type: String,
+      default: '',
       trim: true,
       lowercase: true,
     },
@@ -120,6 +126,16 @@ const storeSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+// Ensure email and businessEmail mirror each other
+storeSchema.pre('validate', function () {
+  if (!this.email && this.businessEmail) {
+    this.email = this.businessEmail;
+  }
+  if (!this.businessEmail && this.email) {
+    this.businessEmail = this.email;
+  }
+});
 
 // Virtual alias: owner -> ownerUser
 storeSchema.virtual('owner').get(function () {
