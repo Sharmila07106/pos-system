@@ -5,20 +5,28 @@ const {
   createUser,
   updateUser,
   deleteUser,
+  inviteStaff,
+  resendInvitation,
+  revokeInvitation,
 } = require('../controllers/userController');
 const { loginUser } = require('../controllers/authController');
-const { protect, adminOnly } = require('../middleware/authMiddleware');
+const { protect, storeOwnerOnly, adminOnly } = require('../middleware/authMiddleware');
 
 // For backwards compatibility with any existing client calls
 router.post('/login', loginUser);
 
-// User management endpoints (Admin only)
+// Staff Invitation endpoints
+router.post('/invite', protect, storeOwnerOnly, inviteStaff);
+router.post('/invite/:id/resend', protect, storeOwnerOnly, resendInvitation);
+router.delete('/invite/:id', protect, storeOwnerOnly, revokeInvitation);
+
+// User management endpoints (Owner / Admin only)
 router.route('/')
-  .get(protect, adminOnly, getUsers)
-  .post(protect, adminOnly, createUser);
+  .get(protect, storeOwnerOnly, getUsers)
+  .post(protect, storeOwnerOnly, createUser);
 
 router.route('/:id')
-  .put(protect, adminOnly, updateUser)
-  .delete(protect, adminOnly, deleteUser);
+  .put(protect, storeOwnerOnly, updateUser)
+  .delete(protect, storeOwnerOnly, deleteUser);
 
 module.exports = router;

@@ -5,6 +5,8 @@ const {
   registerUser,
   loginUser,
   getMe,
+  getInvitationDetails,
+  activateStaff,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -22,6 +24,8 @@ const authLimiter = rateLimit({
 
 router.post('/register', authLimiter, registerUser);
 router.post('/login', authLimiter, loginUser);
+router.get('/invitation/:token', getInvitationDetails);
+router.post('/activate-staff', activateStaff);
 router.get('/me', protect, getMe);
 
 module.exports = router;

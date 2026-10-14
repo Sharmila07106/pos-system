@@ -296,8 +296,200 @@ const getMe = async (req, res) => {
   }
 };
 
+// @desc    Verify invitation token and return details
+// @route   GET /api/auth/invitation/:token
+// @access  Public
+const getInvitationDetails = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const Invitation = require('../models/Invitation');
+    const { memoryInvitations } = require('./userController');
+
+    let invite = null;
+
+    if (mongoose.connection.readyState === 1) {
+      invite = await Invitation.findOne({ token }).populate('store', 'name storeCode city');
+    }
+
+    if (!invite) {
+      invite = memoryInvitations.find((i) => i.token === token);
+    }
+
+    if (!invite) {
+      return res.status(404).json({
+        success: false,
+        message: 'Invalid or unrecognized staff invitation token.',
+      });
+    }
+
+    if (invite.status === 'ACCEPTED') {
+      return res.status(400).json({
+        success: false,
+        message: 'This invitation has already been accepted. Please sign in.',
+      });
+    }
+
+    if (invite.status === 'REVOKED') {
+      return res.status(400).json({
+        success: false,
+        message: 'This invitation was revoked by the store administrator.',
+      });
+    }
+
+    if (new Date(invite.expiresAt) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'This invitation link has expired. Please ask your store owner to resend it.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        name: invite.name,
+        email: invite.email,
+        role: invite.role,
+        storeName: invite.store?.name || invite.storeName || 'FreshMart Supermarket',
+        expiresAt: invite.expiresAt,
+      },
+    });
+  } catch (error) {
+    console.error('getInvitationDetails error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify invitation token',
+    });
+  }
+};
+
+// @desc    Activate staff account from invitation token
+// @route   POST /api/auth/activate-staff
+// @access  Public
+const activateStaff = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    const Invitation = require('../models/Invitation');
+    const AuditLog = require('../models/AuditLog');
+    const { memoryInvitations, memoryStaff } = require('./userController');
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invitation token and password are required',
+      });
+    }
+
+    if (password.length < 8 || !/^(?=.*[A-Za-z])(?=.*\d)/.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters and contain at least one letter and one number',
+      });
+    }
+
+    let invite = null;
+
+    if (mongoose.connection.readyState === 1) {
+      invite = await Invitation.findOne({ token });
+    }
+
+    if (!invite) {
+      invite = memoryInvitations.find((i) => i.token === token);
+    }
+
+    if (!invite || invite.status !== 'PENDING' || new Date(invite.expiresAt) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid, expired, or previously used invitation token.',
+      });
+    }
+
+    if (mongoose.connection.readyState === 1) {
+      let user = await User.findOne({ email: invite.email });
+      if (user) {
+        user.password = password;
+        user.role = invite.role;
+        user.store = invite.store;
+        user.status = 'Active';
+        await user.save();
+      } else {
+        user = await User.create({
+          name: invite.name,
+          email: invite.email,
+          password,
+          role: invite.role,
+          store: invite.store,
+          status: 'Active',
+        });
+      }
+
+      invite.status = 'ACCEPTED';
+      invite.acceptedAt = new Date();
+      await invite.save();
+
+      await AuditLog.create({
+        store: invite.store,
+        actor: user._id,
+        actorName: user.name,
+        actorRole: user.role,
+        action: 'STAFF_ACTIVATED',
+        entity: 'User',
+        entityId: user._id.toString(),
+        details: { email: user.email, role: user.role },
+      });
+
+      const authToken = generateToken(user._id);
+
+      return res.status(201).json({
+        success: true,
+        message: `Account activated successfully! Welcome to StoreFlow, ${user.name}.`,
+        token: authToken,
+        data: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          store: invite.store,
+          status: user.status,
+        },
+      });
+    }
+
+    // Memory fallback
+    invite.status = 'ACCEPTED';
+    invite.acceptedAt = new Date().toISOString();
+
+    const newUser = {
+      _id: `usr_${Date.now()}`,
+      name: invite.name,
+      email: invite.email,
+      role: invite.role,
+      store: invite.store || 'store_demo_freshmart',
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+    };
+
+    memoryStaff.push(newUser);
+    const authToken = generateToken(newUser._id);
+
+    return res.status(201).json({
+      success: true,
+      message: `Account activated successfully! Welcome to StoreFlow, ${newUser.name}.`,
+      token: authToken,
+      data: newUser,
+    });
+  } catch (error) {
+    console.error('activateStaff error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to activate staff account',
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getMe,
+  getInvitationDetails,
+  activateStaff,
 };
