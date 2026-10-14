@@ -1,10 +1,11 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, ShieldAlert, X, KeyRound } from 'lucide-react';
+import { Mail, Lock, AlertCircle, ShieldAlert, X, KeyRound, Database } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { StoreFlowLogo } from '../components/brand/StoreFlowLogo';
 import { Input, PasswordInput } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
 import { useAuth } from '../context/AuthContext';
 
 // Lazy load the 3D scene
@@ -19,7 +20,21 @@ const Login = () => {
   const [showForgotModal, setShowForgotModal] = useState(false);
 
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+
+  const navigateByRole = (userObj) => {
+    if (
+      userObj?.role === 'PLATFORM_SUPER_ADMIN' ||
+      userObj?.role === 'PLATFORM_ADMIN' ||
+      userObj?.isPlatformAdmin
+    ) {
+      navigate('/platform-admin');
+    } else if (userObj?.role === 'CASHIER') {
+      navigate('/pos');
+    } else {
+      navigate('/dashboard');
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -34,22 +49,48 @@ const Login = () => {
       });
 
       toast.success(`Welcome back, ${data.data?.name || 'User'}!`);
-
-      if (data.data?.role === 'PLATFORM_ADMIN' || data.data?.isPlatformAdmin) {
-        navigate('/platform-admin');
-      } else if (data.data?.role === 'CASHIER') {
-        navigate('/pos');
-      } else {
-        navigate('/dashboard');
-      }
+      navigateByRole(data.data);
     } catch (err) {
-      const message =
-        err.response?.data?.message || err.message || 'Invalid email or password';
-      setBackendError(message);
+      if (err.response?.status === 503 || err.response?.data?.code === 'DB_NOT_CONNECTED') {
+        setBackendError(
+          'Database Offline: The backend database is disconnected. Please configure MONGODB_URI in server/.env and restart.'
+        );
+      } else {
+        const message =
+          err.response?.data?.message || err.message || 'Invalid email or password';
+        setBackendError(message);
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const handleGoogleSuccess = async (credential) => {
+    setBackendError('');
+    setLoading(true);
+
+    try {
+      const data = await loginWithGoogle(credential, rememberMe);
+      toast.success(`Welcome back, ${data.data?.name || 'User'}!`);
+      navigateByRole(data.data);
+    } catch (err) {
+      if (err.response?.status === 503 || err.response?.data?.code === 'DB_NOT_CONNECTED') {
+        setBackendError(
+          'Database Offline: The backend database is disconnected. Please configure MONGODB_URI in server/.env and restart.'
+        );
+      } else {
+        const message =
+          err.response?.data?.message || err.message || 'Google authentication failed';
+        setBackendError(message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isDbOffline =
+    backendError.toLowerCase().includes('database') ||
+    backendError.toLowerCase().includes('mongodb');
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#F4F7FB]">
@@ -113,9 +154,24 @@ const Login = () => {
 
           {/* Backend error banner */}
           {backendError && (
-            <div className="mb-6 p-3.5 rounded-[12px] bg-[#FEE2E2] border border-[#FECACA] flex items-center gap-3 text-xs font-bold text-[#E5484D] animate-shake">
-              <AlertCircle size={18} className="shrink-0" />
-              <span>{backendError}</span>
+            <div
+              className={`mb-6 p-4 rounded-[14px] border flex items-start gap-3 text-xs font-semibold leading-relaxed animate-shake ${
+                isDbOffline
+                  ? 'bg-[#FFF8EB] border-[#FDE68A] text-[#92400E]'
+                  : 'bg-[#FEE2E2] border-[#FECACA] text-[#E5484D]'
+              }`}
+            >
+              {isDbOffline ? (
+                <ShieldAlert size={20} className="shrink-0 text-[#D97706] mt-0.5" />
+              ) : (
+                <AlertCircle size={20} className="shrink-0 text-[#E5484D] mt-0.5" />
+              )}
+              <div>
+                <strong className="font-extrabold block mb-0.5">
+                  {isDbOffline ? 'Database Offline (Action Required)' : 'Authentication Failed'}
+                </strong>
+                <span>{backendError}</span>
+              </div>
             </div>
           )}
 
@@ -168,6 +224,25 @@ const Login = () => {
               Sign In to StoreFlow
             </Button>
           </form>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#E3E8F0]" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-white px-3 text-[#8B96AB] font-bold tracking-wider">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          {/* Google Sign In */}
+          <GoogleSignInButton
+            onSuccess={handleGoogleSuccess}
+            onError={(errMsg) => setBackendError(errMsg || 'Google authentication failed')}
+            loading={loading}
+          />
 
           {/* Helper notice with link to Register */}
           <div className="mt-8 pt-6 border-t border-[#E3E8F0] text-center">
