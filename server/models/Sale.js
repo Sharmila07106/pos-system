@@ -4,18 +4,18 @@ const saleItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
-    required: true
+    required: true,
   },
   batch: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Batch'
+    ref: 'Batch',
   },
   batchNumber: { type: String, default: '' },
   name: { type: String, required: true },
   barcode: { type: String, required: true },
   quantity: { type: Number, required: true, min: 1 },
   price: { type: Number, required: true },
-  total: { type: Number, required: true }
+  total: { type: Number, required: true },
 });
 
 const saleSchema = new mongoose.Schema(
@@ -23,12 +23,17 @@ const saleSchema = new mongoose.Schema(
     store: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Store',
+      required: [true, 'Store reference is required'],
       index: true,
     },
     transactionId: {
       type: String,
       required: true,
       unique: true,
+      index: true,
+    },
+    receiptNo: {
+      type: String,
       index: true,
     },
     items: [saleItemSchema],
@@ -40,7 +45,7 @@ const saleSchema = new mongoose.Schema(
     paymentMethod: {
       type: String,
       enum: ['CASH', 'CARD', 'UPI'],
-      required: true
+      required: true,
     },
     amountReceived: { type: Number },
     changeGiven: { type: Number },
@@ -51,16 +56,23 @@ const saleSchema = new mongoose.Schema(
       index: true,
     },
     refundReason: { type: String, default: '' },
-    cashier: {
-      type: String,
-      required: true,
-      default: 'Admin'
+    cashierUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
     },
-    cashierName: { type: String, default: 'Sharmila' }
+    cashierName: {
+      type: String,
+      default: 'Staff',
+    },
   },
   {
     timestamps: true,
   }
 );
+
+// Compound index for fast tenant query by date
+saleSchema.index({ store: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Sale', saleSchema);
