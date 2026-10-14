@@ -178,10 +178,11 @@ const MainLayout = () => {
 
           {/* Right Header Area */}
           <div className="flex items-center gap-5">
-            {/* Store Name Chip */}
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-[#EEF2F8] border border-[#E3E8F0] rounded-[10px] text-xs font-bold text-[#0B1B3A]">
+            {/* Store Name & Tenant Chip */}
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#EEF2F8] border border-[#E3E8F0] rounded-[10px] text-xs font-bold text-[#0B1B3A]">
               <Store size={14} className="text-[#0FA38F]" strokeWidth={1.75} />
-              <span>{storeName}</span>
+              <span>{user.store?.name || storeName || 'FreshMart Supermarket'}</span>
+              <span className="w-2 h-2 rounded-full bg-[#0FA38F] animate-pulse" title="Tenant Active & Isolated" />
             </div>
 
             {/* Live Date / Time */}

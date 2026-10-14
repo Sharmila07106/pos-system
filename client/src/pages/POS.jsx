@@ -16,7 +16,9 @@ import {
   X,
   Package,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,18 +36,26 @@ const POS = () => {
   const [amountReceived, setAmountReceived] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [saleCompleteData, setSaleCompleteData] = useState(null);
+  const [batches, setBatches] = useState([]);
   const [imageErrorMap, setImageErrorMap] = useState({});
 
   const searchInputRef = useRef(null);
   const { width, height } = useWindowSize();
 
-  // Load products from API
+  // Load products & FEFO batches from API
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/products?activeOnly=true&limit=100');
-      if (res.data?.data) {
-        setProducts(res.data.data);
+      const [prodRes, batchRes] = await Promise.allSettled([
+        api.get('/products?activeOnly=true&limit=100'),
+        api.get('/inventory/batches')
+      ]);
+
+      if (prodRes.status === 'fulfilled' && prodRes.value?.data?.data) {
+        setProducts(prodRes.value.data.data);
+      }
+      if (batchRes.status === 'fulfilled' && batchRes.value?.data?.data) {
+        setBatches(batchRes.value.data.data);
       }
     } catch (err) {
       console.error('Failed to load products:', err);
@@ -378,10 +388,23 @@ const POS = () => {
                   </div>
 
                   {/* Product Details */}
-                  <div className="flex-1 min-w-0 mb-3">
-                    <span className="text-[11px] font-bold text-[#8B96AB] uppercase tracking-wider block mb-0.5">
-                      {p.category}
-                    </span>
+                  <div className="flex-1 min-w-0 mb-2">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span className="text-[11px] font-bold text-[#8B96AB] uppercase tracking-wider block">
+                        {p.category}
+                      </span>
+                      {(() => {
+                        const b = batches.find(item => (item.product?._id === p._id || item.product === p._id) && item.remainingQuantity > 0);
+                        if (b && b.daysToExpiry !== undefined && b.daysToExpiry <= 7) {
+                          return (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-[#FEF3C7] text-[#D97706] border border-[#F59E0B]/30" title={`Expiring on ${new Date(b.expiryDate).toLocaleDateString()}`}>
+                              <Clock size={9} /> {b.daysToExpiry <= 0 ? 'Exp' : `${b.daysToExpiry}d`}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                     <h3 className="font-bold text-[#0B1B3A] text-sm truncate leading-snug" title={p.name}>
                       {p.name}
                     </h3>
@@ -491,9 +514,22 @@ const POS = () => {
                     <h4 className="font-bold text-[#0B1B3A] text-xs sm:text-sm truncate leading-snug">
                       {item.name}
                     </h4>
-                    <span className="text-[11px] font-semibold text-[#8B96AB]">
-                      ₹{item.price.toFixed(2)} each
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-semibold text-[#8B96AB]">
+                        ₹{item.price.toFixed(2)} each
+                      </span>
+                      {(() => {
+                        const b = batches.find(batchItem => (batchItem.product?._id === item._id || batchItem.product === item._id) && batchItem.remainingQuantity > 0);
+                        if (b) {
+                          return (
+                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#E2F6F3] text-[#0FA38F] font-bold">
+                              FEFO {b.batchNumber}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
                   </div>
 
                   {/* Stepper Buttons */}
