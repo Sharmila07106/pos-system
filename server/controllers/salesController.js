@@ -5,6 +5,8 @@ const Product = require('../models/Product');
 const StockMovement = require('../models/StockMovement');
 const Settings = require('../models/Settings');
 const Batch = require('../models/Batch');
+const Store = require('../models/Store');
+const User = require('../models/User');
 
 const memorySales = [];
 
@@ -14,6 +16,7 @@ const generateTxnId = async (storeId) => {
   return `TXN-${String(count + 1).padStart(5, '0')}`;
 };
 
+// @desc    Create a new sale (checkout)
 // @desc    Create a new sale (checkout)
 // @route   POST /api/sales
 // @access  Private (Store Staff Only - Platform Admin Forbidden)
@@ -32,7 +35,7 @@ const createSale = asyncHandler(async (req, res) => {
 
   const { items, discount = 0, paymentMethod, amountReceived } = req.body;
 
-  if (!items || items.length === 0) {
+  if (!items || !Array.isArray(items) || items.length === 0) {
     res.status(400);
     throw new Error('No items in cart');
   }
@@ -43,106 +46,193 @@ const createSale = asyncHandler(async (req, res) => {
     throw new Error(`Payment method must be one of: ${validMethods.join(', ')}`);
   }
 
+  // Idempotency check: prevent duplicate billing on repeated clicks or network retry
+  const clientKey = req.body.idempotencyKey || req.headers['idempotency-key'] || req.headers['x-idempotency-key'];
+  if (clientKey) {
+    const existingSale = await Sale.findOne({ store: storeId, idempotencyKey: clientKey });
+    if (existingSale) {
+      return res.status(200).json({
+        success: true,
+        message: 'Sale already processed',
+        data: existingSale,
+        isDuplicate: true,
+      });
+    }
+  }
+
+  // First pass: Validate all products and stock availability before making any DB changes
+  const productIds = items.map((it) => it._id || it.product);
+  const dbProducts = await Product.find({
+    _id: { $in: productIds },
+    store: storeId,
+    isActive: true,
+  });
+
+  const productMap = new Map();
+  dbProducts.forEach((p) => productMap.set(p._id.toString(), p));
+
+  for (const item of items) {
+    const pId = (item._id || item.product || '').toString();
+    const product = productMap.get(pId);
+    if (!product) {
+      res.status(400);
+      throw new Error(`Product not found or inactive in this supermarket: ${item.name || item.barcode || pId}`);
+    }
+
+    const requestedQty = Number(item.qty || item.quantity) || 1;
+    if (requestedQty <= 0) {
+      res.status(400);
+      throw new Error(`Invalid quantity for ${product.name}`);
+    }
+
+    if (product.stock < requestedQty) {
+      res.status(400);
+      throw new Error(`Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${requestedQty}`);
+    }
+  }
+
+  // Atomic decrement pass: Conditionally decrement stock with rollback on any failure
+  const decrementedItems = [];
+  let deductionFailed = false;
+  let failureReason = '';
+
+  for (const item of items) {
+    const pId = (item._id || item.product).toString();
+    const requestedQty = Number(item.qty || item.quantity) || 1;
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: pId, store: storeId, isActive: true, stock: { $gte: requestedQty } },
+      { $inc: { stock: -requestedQty } },
+      { new: true }
+    );
+
+    if (!updatedProduct) {
+      deductionFailed = true;
+      const currentProd = await Product.findOne({ _id: pId, store: storeId });
+      failureReason = `Insufficient stock for "${currentProd?.name || 'Item'}". Available: ${currentProd?.stock ?? 0}, Requested: ${requestedQty}`;
+      break;
+    }
+
+    decrementedItems.push({
+      product: updatedProduct,
+      qty: requestedQty,
+      stockBefore: updatedProduct.stock + requestedQty,
+      stockAfter: updatedProduct.stock,
+    });
+  }
+
+  // If any item failed atomic decrement, rollback all previous items in this sale
+  if (deductionFailed) {
+    for (const dec of decrementedItems) {
+      await Product.updateOne(
+        { _id: dec.product._id, store: storeId },
+        { $inc: { stock: dec.qty } }
+      ).catch((err) => console.error('Stock decrement rollback error:', err));
+    }
+    res.status(400);
+    throw new Error(failureReason || 'Failed to complete checkout due to insufficient stock');
+  }
+
   const txnId = await generateTxnId(storeId);
   let subtotal = 0;
   const processedItems = [];
   const stockMovements = [];
 
-  // Deduct inventory sequentially
-  for (const item of items) {
-    const product = await Product.findOne({
-      _id: item._id || item.product,
-      store: storeId,
-      isActive: true,
-    });
-
-    if (!product) {
-      res.status(400);
-      throw new Error(`Product not found or inactive in this supermarket: ${item.name || item.barcode}`);
-    }
-
-    if (product.stock < item.qty) {
-      res.status(400);
-      throw new Error(`Insufficient stock for "${product.name}". Available: ${product.stock}, Requested: ${item.qty}`);
-    }
-
-    // Atomic update on product stock
-    const stockBefore = product.stock;
-    product.stock -= item.qty;
-    await product.save();
-    const stockAfter = product.stock;
-
-    const itemTotal = product.price * item.qty;
+  // Strictly recompute prices from DB records (never trust client prices)
+  for (const dec of decrementedItems) {
+    const dbPrice = dec.product.price;
+    const itemTotal = Number((dbPrice * dec.qty).toFixed(2));
     subtotal += itemTotal;
 
     processedItems.push({
-      product: product._id,
-      name: product.name,
-      barcode: product.barcode,
-      quantity: item.qty,
-      price: product.price,
+      product: dec.product._id,
+      name: dec.product.name,
+      barcode: dec.product.barcode,
+      quantity: dec.qty,
+      price: dbPrice,
       total: itemTotal,
     });
 
     stockMovements.push({
       store: storeId,
-      product: product._id,
+      product: dec.product._id,
       type: 'SALE',
-      quantityChange: -item.qty,
-      stockBefore,
-      stockAfter,
+      quantityChange: -dec.qty,
+      stockBefore: dec.stockBefore,
+      stockAfter: dec.stockAfter,
       reference: txnId,
       performedByUser: req.user._id,
       performedBy: req.user.name || 'Cashier',
     });
 
     // FEFO Batch Depletion for products with batch tracking
-    try {
-      const batches = await Batch.find({
-        store: storeId,
-        product: product._id,
-        remainingQuantity: { $gt: 0 },
-        status: 'ACTIVE',
-      }).sort({ expiryDate: 1 });
+    if (mongoose.Types.ObjectId.isValid(dec.product._id)) {
+      try {
+        const batches = await Batch.find({
+          store: storeId,
+          product: dec.product._id,
+          remainingQuantity: { $gt: 0 },
+          status: 'ACTIVE',
+        }).sort({ expiryDate: 1 });
 
-      let qtyToDeduct = item.qty;
-      for (const b of batches) {
-        if (qtyToDeduct <= 0) break;
-        const deduct = Math.min(b.remainingQuantity, qtyToDeduct);
-        b.remainingQuantity -= deduct;
-        if (b.remainingQuantity === 0) {
-          b.status = 'DEPLETED';
+        let qtyToDeduct = dec.qty;
+        for (const b of batches) {
+          if (qtyToDeduct <= 0) break;
+          const deduct = Math.min(b.remainingQuantity, qtyToDeduct);
+          b.remainingQuantity -= deduct;
+          if (b.remainingQuantity === 0) {
+            b.status = 'DEPLETED';
+          }
+          await b.save();
+          qtyToDeduct -= deduct;
         }
-        await b.save();
-        qtyToDeduct -= deduct;
+      } catch (batchErr) {
+        console.warn('Batch depletion warning:', batchErr.message);
       }
-    } catch (batchErr) {
-      console.warn('Batch depletion warning:', batchErr.message);
     }
   }
 
-  // Fetch store tax settings
+  // Fetch store tax settings & snapshot
   let taxRate = 5;
-  const storeSettings = await Settings.findOne({ store: storeId });
-  if (storeSettings && storeSettings.taxRatePercent !== undefined) {
-    taxRate = storeSettings.taxRatePercent;
+  let storeDoc = null;
+  if (mongoose.Types.ObjectId.isValid(storeId)) {
+    try {
+      storeDoc = await Store.findById(storeId);
+      if (storeDoc && storeDoc.taxRatePercent !== undefined) {
+        taxRate = storeDoc.taxRatePercent;
+      }
+    } catch (err) {
+      console.warn('Store fetch error in sale:', err.message);
+    }
   }
 
+  const discountAmount = Math.max(0, Number(discount) || 0);
   const tax = Number(((subtotal * taxRate) / 100).toFixed(2));
-  const finalTotal = Math.max(0, subtotal + tax - (Number(discount) || 0));
-  const received = Number(amountReceived) || finalTotal;
-  const change = Math.max(0, received - finalTotal);
+  const finalTotal = Math.max(0, Number((subtotal + tax - discountAmount).toFixed(2)));
+  const received = paymentMethod === 'CASH' ? Math.max(finalTotal, Number(amountReceived) || finalTotal) : finalTotal;
+  const change = Math.max(0, Number((received - finalTotal).toFixed(2)));
+
+  const storeSnapshot = storeDoc
+    ? {
+        name: storeDoc.name,
+        address: `${storeDoc.address || ''}, ${storeDoc.city || ''}`.trim().replace(/^,\s*|,\s*$/g, ''),
+        phone: storeDoc.phone || '',
+        gstin: storeDoc.gstin || '',
+        receiptFooter: storeDoc.receiptFooter || 'Thank you for shopping with us! Visit again.',
+      }
+    : undefined;
 
   // Save Sale record
   const sale = await Sale.create({
     store: storeId,
     transactionId: txnId,
     receiptNo: txnId,
+    idempotencyKey: clientKey || undefined,
     items: processedItems,
-    subtotal,
+    subtotal: Number(subtotal.toFixed(2)),
     tax,
     taxRate,
-    discount: Number(discount) || 0,
+    discount: discountAmount,
     total: finalTotal,
     paymentMethod,
     amountReceived: received,
@@ -150,6 +240,7 @@ const createSale = asyncHandler(async (req, res) => {
     status: 'COMPLETED',
     cashierUser: req.user._id,
     cashierName: req.user.name || 'Cashier',
+    storeSnapshot,
   });
 
   // Record stock movements in parallel
@@ -249,9 +340,16 @@ const getSaleById = asyncHandler(async (req, res) => {
     });
   }
 
-  const sale = await Sale.findById(req.params.id)
-    .populate('items.product', 'name barcode image')
+  let query = Sale.findById(req.params.id)
+    .populate('items.product', 'name barcode image category')
     .populate('cashierUser', 'name email');
+  if (query && typeof query.populate === 'function') {
+    try {
+      const q3 = query.populate('store', 'name address phone city gstin receiptFooter taxRatePercent');
+      if (q3) query = q3;
+    } catch (_) {}
+  }
+  const sale = await query;
 
   if (!sale) {
     res.status(404);
@@ -275,11 +373,41 @@ const refundSale = asyncHandler(async (req, res) => {
     ['store_admin', 'store_owner', 'admin'].includes(userRole) ||
     req.user?.isPlatformAdmin;
 
+  let approverName = req.user?.name || 'Admin';
+
   if (!isStoreAdmin) {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Voiding or refunding a bill requires store admin privileges or approval.',
+    const { adminEmail, adminPassword } = req.body;
+    if (!adminEmail || !adminPassword) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied: Voiding or refunding a bill requires store admin privileges or store admin approval.',
+      });
+    }
+
+    const adminUser = await User.findOne({
+      email: adminEmail.toLowerCase().trim(),
+      store: req.storeId,
     });
+
+    if (
+      !adminUser ||
+      !['store_admin', 'store_owner', 'admin'].includes((adminUser.role || '').toLowerCase())
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid store admin credentials for refund approval.',
+      });
+    }
+
+    const isMatch = await adminUser.matchPassword(adminPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Incorrect store admin password.',
+      });
+    }
+
+    approverName = `${adminUser.name} (Approved for ${req.user?.name || 'Cashier'})`;
   }
 
   const storeId = req.storeId;
@@ -317,7 +445,7 @@ const refundSale = asyncHandler(async (req, res) => {
         stockAfter: product.stock,
         reference: `REFUND-${sale.transactionId}`,
         performedByUser: req.user._id,
-        performedBy: req.user.name || 'Admin',
+        performedBy: approverName,
       }).catch(() => {});
     }
   }

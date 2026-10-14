@@ -36,6 +36,11 @@ const saleSchema = new mongoose.Schema(
       type: String,
       index: true,
     },
+    idempotencyKey: {
+      type: String,
+      sparse: true,
+      index: true,
+    },
     items: [saleItemSchema],
     subtotal: { type: Number, required: true },
     tax: { type: Number, required: true },
@@ -65,6 +70,13 @@ const saleSchema = new mongoose.Schema(
     cashierName: {
       type: String,
       default: 'Staff',
+    },
+    storeSnapshot: {
+      name: { type: String, default: '' },
+      address: { type: String, default: '' },
+      phone: { type: String, default: '' },
+      gstin: { type: String, default: '' },
+      receiptFooter: { type: String, default: '' },
     },
   },
   {

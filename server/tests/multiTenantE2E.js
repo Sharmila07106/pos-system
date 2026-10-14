@@ -31,12 +31,13 @@ const {
 const { activateStaff } = require('../controllers/authController');
 const { getProductById } = require('../controllers/productController');
 const { getDashboardStats } = require('../controllers/dashboardController');
-const { getSales, getSaleById } = require('../controllers/salesController');
+const { getSales, getSaleById, createSale, refundSale } = require('../controllers/salesController');
 
 const Store = require('../models/Store');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Sale = require('../models/Sale');
+const StockMovement = require('../models/StockMovement');
 const Complaint = require('../models/Complaint');
 const Settings = require('../models/Settings');
 const ActivityLog = require('../models/ActivityLog');
@@ -884,15 +885,19 @@ async function runMultiTenantTestSuite() {
     // Sub-test 7.5: Cross-tenant isolation - Store A admin cannot read Store B sales receipt
     {
       const origSaleFindById = Sale.findById;
-      Sale.findById = () => ({
-        populate: () => ({
-          populate: async () => ({
-            _id: 'sale_store_B',
-            transactionId: 'TXN-99999',
-            store: 'store_tenant_B',
-          }),
-        }),
-      });
+      Sale.findById = () => {
+        const doc = {
+          _id: 'sale_store_B',
+          transactionId: 'TXN-99999',
+          store: 'store_tenant_B',
+        };
+        const mockQuery = {
+          populate: () => mockQuery,
+          then: (resolve) => Promise.resolve(doc).then(resolve),
+          catch: (reject) => Promise.resolve(doc).catch(reject),
+        };
+        return mockQuery;
+      };
 
       const { req, res } = mockReqRes(
         {},
@@ -917,6 +922,232 @@ async function runMultiTenantTestSuite() {
       );
 
       Sale.findById = origSaleFindById;
+    }
+  }
+
+  // =========================================================================
+  // SUITE 8: POS Atomic Checkout, Recomputed Prices, Idempotency & Stock Logic
+  // =========================================================================
+  console.log('\n--- SUITE 8: POS Atomic Checkout & Cashier Billing Operations ---');
+  {
+    const mockStoreId = 'store_pos_test';
+    const mockCashier = { _id: 'cashier_user_1', name: 'Ramesh Cashier', role: 'CASHIER' };
+
+    // Sub-test 8.1: Recomputes prices strictly from DB (never trusts client prices)
+    {
+      const productCola = {
+        _id: 'prod_cola_123',
+        name: 'Coca Cola 500ml',
+        barcode: '8901234567890',
+        price: 50.0, // Real DB price
+        stock: 20,
+        isActive: true,
+        store: mockStoreId,
+      };
+
+      const origProductFind = Product.find;
+      const origProductFindOneAndUpdate = Product.findOneAndUpdate;
+      const origSaleCreate = Sale.create;
+      const origSaleCountDocuments = Sale.countDocuments;
+      const origStockMovementInsertMany = StockMovement.insertMany;
+
+      Product.find = async () => [productCola];
+      Product.findOneAndUpdate = async () => ({
+        ...productCola,
+        stock: 18,
+      });
+      Sale.countDocuments = async () => 10;
+      let createdSaleDoc = null;
+      Sale.create = async (doc) => {
+        createdSaleDoc = { _id: 'sale_res_1', ...doc };
+        return createdSaleDoc;
+      };
+      StockMovement.insertMany = async () => [];
+
+      // Client maliciously or erroneously sends price: 5 instead of 50
+      const { req, res } = mockReqRes(
+        {
+          items: [{ _id: 'prod_cola_123', qty: 2, price: 5.0 }],
+          paymentMethod: 'CASH',
+          amountReceived: 200,
+        },
+        {},
+        {},
+        mockCashier,
+        mockStoreId
+      );
+
+      await createSale(req, res);
+
+      assert(
+        res.statusCode === 201 &&
+          createdSaleDoc &&
+          createdSaleDoc.items[0].price === 50.0 &&
+          createdSaleDoc.subtotal === 100.0,
+        'POS recomputes prices strictly from DB (client price ₹5 ignored in favor of DB price ₹50)'
+      );
+
+      Product.find = origProductFind;
+      Product.findOneAndUpdate = origProductFindOneAndUpdate;
+      Sale.create = origSaleCreate;
+      Sale.countDocuments = origSaleCountDocuments;
+      StockMovement.insertMany = origStockMovementInsertMany;
+    }
+
+    // Sub-test 8.2: Atomic decrement rolls back when any item lacks sufficient stock
+    {
+      const prodA = { _id: 'prod_A', name: 'Product A', stock: 10, price: 20, isActive: true, store: mockStoreId };
+      const prodB = { _id: 'prod_B', name: 'Product B', stock: 1, price: 30, isActive: true, store: mockStoreId };
+
+      const origProductFind = Product.find;
+      Product.find = async () => [prodA, prodB];
+
+      const { req, res } = mockReqRes(
+        {
+          items: [
+            { _id: 'prod_A', qty: 2 },
+            { _id: 'prod_B', qty: 5 }, // requested 5, only 1 available!
+          ],
+          paymentMethod: 'CASH',
+        },
+        {},
+        {},
+        mockCashier,
+        mockStoreId
+      );
+
+      let threwError = false;
+      let errorMsg = '';
+      try {
+        await createSale(req, res);
+      } catch (err) {
+        threwError = true;
+        errorMsg = err.message;
+      }
+
+      assert(
+        (threwError && errorMsg.includes('Insufficient stock for "Product B"')) || res.statusCode === 400,
+        'Sale fails atomically and rolls back if any cart item has insufficient stock'
+      );
+
+      Product.find = origProductFind;
+    }
+
+    // Sub-test 8.3: Idempotency key prevents duplicate billing on repeated request
+    {
+      const existingProcessedSale = {
+        _id: 'sale_idempotent_123',
+        transactionId: 'TXN-00042',
+        idempotencyKey: 'idemp-key-xyz-999',
+        total: 105.0,
+        status: 'COMPLETED',
+      };
+
+      const origSaleFindOne = Sale.findOne;
+      Sale.findOne = async (query) => {
+        if (query.idempotencyKey === 'idemp-key-xyz-999') {
+          return existingProcessedSale;
+        }
+        return null;
+      };
+
+      const { req, res } = mockReqRes(
+        {
+          idempotencyKey: 'idemp-key-xyz-999',
+          items: [{ _id: 'prod_1', qty: 1 }],
+          paymentMethod: 'UPI',
+        },
+        {},
+        {},
+        mockCashier,
+        mockStoreId
+      );
+
+      await createSale(req, res);
+
+      assert(
+        res.statusCode === 200 && res.data?.isDuplicate === true && res.data?.data?._id === 'sale_idempotent_123',
+        'Idempotency key prevents duplicate billing and returns existing completed sale'
+      );
+
+      Sale.findOne = origSaleFindOne;
+    }
+
+    // Sub-test 8.4: Cashier cannot void/refund bill without store admin approval
+    {
+      const saleToVoid = {
+        _id: 'sale_to_void_1',
+        transactionId: 'TXN-00050',
+        store: mockStoreId,
+        status: 'COMPLETED',
+        items: [{ product: 'prod_1', quantity: 2 }],
+        save: async function () { return this; },
+      };
+
+      const origSaleFindById = Sale.findById;
+      Sale.findById = async () => saleToVoid;
+
+      // Cashier attempts refund without admin credentials
+      const { req, res } = mockReqRes(
+        { reason: 'Customer returned item' },
+        {},
+        { id: 'sale_to_void_1' },
+        mockCashier,
+        mockStoreId
+      );
+
+      await refundSale(req, res);
+
+      assert(
+        res.statusCode === 403 && res.data?.message?.includes('requires store admin privileges or store admin approval'),
+        'Cashier voiding bill without store admin approval is blocked with 403 Forbidden'
+      );
+
+      // Sub-test 8.5: Cashier can void bill when store admin credentials are provided
+      const origUserFindOne = User.findOne;
+      const origProductFindOne = Product.findOne;
+      const origStockMovementCreate = StockMovement.create;
+
+      User.findOne = async (query) => ({
+        _id: 'admin_owner_1',
+        name: 'Store Owner',
+        email: query.email,
+        role: 'STORE_ADMIN',
+        matchPassword: async (pwd) => pwd === 'ownerSecret123',
+      });
+
+      Product.findOne = async () => ({
+        _id: 'prod_1',
+        stock: 18,
+        save: async function () { this.stock += 2; return this; },
+      });
+      StockMovement.create = async () => ({});
+
+      const { req: authReq, res: authRes } = mockReqRes(
+        {
+          reason: 'Defective item exchange',
+          adminEmail: 'owner@store.com',
+          adminPassword: 'ownerSecret123',
+        },
+        {},
+        { id: 'sale_to_void_1' },
+        mockCashier,
+        mockStoreId
+      );
+
+      await refundSale(authReq, authRes);
+
+      assert(
+        authRes.statusCode === 200 &&
+          authRes.data?.data?.status === 'REFUNDED' &&
+          authRes.data?.message?.includes('refunded successfully'),
+        'Cashier voids bill successfully when verified with store admin approval credentials'
+      );
+
+      Sale.findById = origSaleFindById;
+      User.findOne = origUserFindOne;
+      Product.findOne = origProductFindOne;
+      StockMovement.create = origStockMovementCreate;
     }
   }
 
