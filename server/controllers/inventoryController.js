@@ -353,11 +353,43 @@ const getExpiryAlerts = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get waste analytics / summary for store
+// @route   GET /api/inventory/waste/analytics
+// @access  Private
+const getWasteAnalytics = asyncHandler(async (req, res) => {
+  const storeId = req.storeId;
+  const filter = {};
+  if (req.user?.role !== 'PLATFORM_ADMIN') {
+    if (!storeId) {
+      return res.json({ success: true, count: 0, data: [], summary: { totalCost: 0, totalQuantity: 0 } });
+    }
+    filter.store = storeId;
+  }
+
+  const wasteRecords = await WasteRecord.find(filter)
+    .populate('product', 'name barcode category')
+    .sort({ createdAt: -1 });
+
+  const totalCost = wasteRecords.reduce((sum, w) => sum + (w.costImpact || 0), 0);
+  const totalQuantity = wasteRecords.reduce((sum, w) => sum + (w.quantity || 0), 0);
+
+  return res.json({
+    success: true,
+    count: wasteRecords.length,
+    data: wasteRecords,
+    summary: {
+      totalCost,
+      totalQuantity,
+    },
+  });
+});
+
 module.exports = {
   getBatches,
   receiveBatch,
   recordWaste,
   getWasteRecords,
+  getWasteAnalytics,
   getStockMovements,
   adjustStock,
   getExpiryAlerts,

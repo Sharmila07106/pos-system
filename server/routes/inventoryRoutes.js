@@ -6,7 +6,9 @@ const {
   getBatches,
   receiveBatch,
   recordWaste,
+  getWasteRecords,
   getWasteAnalytics,
+  getExpiryAlerts,
 } = require('../controllers/inventoryController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -21,8 +23,13 @@ router.route('/batches')
   .get(getBatches)
   .post(receiveBatch);
 
+router.route('/expiry-alerts').get(getExpiryAlerts);
+
 // Food waste tracking & analytics
-router.route('/waste').post(recordWaste);
+router.route('/waste')
+  .get(getWasteRecords)
+  .post(recordWaste);
+
 router.route('/waste/analytics').get(getWasteAnalytics);
 
 module.exports = router;
