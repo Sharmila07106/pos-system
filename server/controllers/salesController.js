@@ -4,10 +4,12 @@ const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 const StockMovement = require('../models/StockMovement');
 const Settings = require('../models/Settings');
+const Batch = require('../models/Batch');
 
 // In-memory sales fallback
 const memorySales = [];
 const { memoryProducts } = require('./productController');
+const { memoryBatches } = require('./inventoryController');
 
 // Helper to generate transaction ID
 const generateTxnId = async () => {
@@ -73,6 +75,7 @@ const createSale = asyncHandler(async (req, res) => {
         });
 
         stockMovements.push({
+          store: req.storeId || req.user?.store,
           product: product._id,
           type: 'SALE',
           quantityChange: -item.qty,
@@ -81,6 +84,29 @@ const createSale = asyncHandler(async (req, res) => {
           reference: txnId,
           performedBy: req.user?.name || 'Admin'
         });
+
+        // FEFO (First-Expired-First-Out) Batch Depletion
+        try {
+          const batches = await Batch.find({
+            product: product._id,
+            remainingQuantity: { $gt: 0 },
+            status: 'ACTIVE'
+          }).sort({ expiryDate: 1 }).session(session);
+
+          let qtyRemainingToDeduct = item.qty;
+          for (const b of batches) {
+            if (qtyRemainingToDeduct <= 0) break;
+            const deduct = Math.min(b.remainingQuantity, qtyRemainingToDeduct);
+            b.remainingQuantity -= deduct;
+            qtyRemainingToDeduct -= deduct;
+            if (b.remainingQuantity === 0) {
+              b.status = 'DEPLETED';
+            }
+            await b.save({ session });
+          }
+        } catch (bErr) {
+          console.warn('Batch FEFO deduction notice:', bErr.message);
+        }
       }
 
       let settings = await Settings.findOne({}).session(session);
@@ -98,6 +124,7 @@ const createSale = asyncHandler(async (req, res) => {
 
       const sale = new Sale({
         transactionId: txnId,
+        store: req.storeId || req.user?.store,
         items: processedItems,
         subtotal,
         tax,
@@ -151,6 +178,24 @@ const createSale = asyncHandler(async (req, res) => {
     product.stock -= item.qty;
     const itemTotal = product.price * item.qty;
     subtotal += itemTotal;
+
+    // In-memory FEFO batch depletion
+    try {
+      let qtyRemainingToDeduct = item.qty;
+      const batches = memoryBatches
+        .filter(b => (b.product === item._id || b.product === product._id) && b.remainingQuantity > 0)
+        .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+      for (const b of batches) {
+        if (qtyRemainingToDeduct <= 0) break;
+        const deduct = Math.min(b.remainingQuantity, qtyRemainingToDeduct);
+        b.remainingQuantity -= deduct;
+        qtyRemainingToDeduct -= deduct;
+        if (b.remainingQuantity === 0) {
+          b.status = 'DEPLETED';
+        }
+      }
+    } catch (e) {}
 
     processedItems.push({
       _id: product._id,
