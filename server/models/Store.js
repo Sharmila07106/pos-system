@@ -9,35 +9,23 @@ const storeSchema = new mongoose.Schema(
     },
     slug: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
-      index: true,
     },
     storeCode: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       uppercase: true,
       trim: true,
-      index: true,
     },
-    owner: {
+    ownerUser: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
-    },
-    businessEmail: {
-      type: String,
-      required: [true, 'Business email is required'],
-      trim: true,
-      lowercase: true,
-    },
-    phone: {
-      type: String,
-      required: [true, 'Contact phone is required'],
-      trim: true,
+      required: [true, 'Store owner user is required'],
+      index: true,
     },
     address: {
       type: String,
@@ -46,19 +34,62 @@ const storeSchema = new mongoose.Schema(
     },
     city: {
       type: String,
-      default: 'Chennai',
+      required: [true, 'City is required'],
       trim: true,
     },
-    storeType: {
+    state: {
       type: String,
-      default: 'Supermarket',
+      default: 'Tamil Nadu',
       trim: true,
+    },
+    pincode: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    phone: {
+      type: String,
+      required: [true, 'Contact phone is required'],
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: [true, 'Business email is required'],
+      trim: true,
+      lowercase: true,
+    },
+    gstin: {
+      type: String,
+      default: '',
+      trim: true,
+      uppercase: true,
     },
     status: {
       type: String,
-      enum: ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'],
-      default: 'APPROVED',
+      enum: ['PENDING', 'ACTIVE', 'REJECTED', 'SUSPENDED'],
+      default: 'PENDING',
       index: true,
+    },
+    statusReason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    requestedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    reviewedAt: {
+      type: Date,
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    notes: {
+      type: String,
+      default: '',
+      trim: true,
     },
     currency: {
       type: String,
@@ -75,7 +106,14 @@ const storeSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+// Virtual alias: owner -> ownerUser
+storeSchema.virtual('owner').get(function () {
+  return this.ownerUser;
+});
 
 module.exports = mongoose.model('Store', storeSchema);
