@@ -1,5 +1,6 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../services/api';
 import { 
   ArrowRight, 
   Zap, 
@@ -23,6 +24,11 @@ const StoreFlow3DScene = lazy(() => import('../components/three/StoreFlow3DScene
 
 const Home = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Silent wake-up ping for free tier backend (Render)
+    api.get('/health', { skipToast: true }).catch(() => {});
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F4F7FB] text-[#0F1B33] font-sans selection:bg-[#12A58B]/20 selection:text-[#12A58B]">

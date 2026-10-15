@@ -1,8 +1,21 @@
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
+const isProd = import.meta.env.PROD;
+const configuredApiUrl = import.meta.env.VITE_API_URL;
+
+if (isProd && !configuredApiUrl) {
+  console.error(
+    '❌ StoreFlow Configuration Error: VITE_API_URL is missing in this production build.\n' +
+    'Please configure VITE_API_URL=https://YOUR-BACKEND.onrender.com/api in your Vercel Project Environment Variables.'
+  );
+}
+
+// In production, strictly use configuredApiUrl. In development, fallback to localhost:5090
+const baseURL = configuredApiUrl || (isProd ? '' : 'http://localhost:5090/api');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5090/api',
+  baseURL,
 });
 
 // Request interceptor for auth token (checks localStorage or sessionStorage)

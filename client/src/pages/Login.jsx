@@ -1,6 +1,6 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, LogOut } from 'lucide-react';
+import { Mail, Lock, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, LogOut, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { StoreFlowLogo } from '../components/brand/StoreFlowLogo';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -19,40 +19,14 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [backendError, setBackendError] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
-  const [dbConnecting, setDbConnecting] = useState(false);
-  const [retryStatus, setRetryStatus] = useState('');
+
+  // Cold Start UX states for Render free tier
+  const [isServerWaking, setIsServerWaking] = useState(false);
+  const [wakeSeconds, setWakeSeconds] = useState(0);
+  const pendingLoginRef = useRef(null);
 
   const navigate = useNavigate();
   const { user, isAuthenticated, login, loginWithGoogle, logout } = useAuth();
-
-  // Poll database health every 3 seconds until connected
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkDbHealth = async () => {
-      try {
-        const res = await api.get('/health', { skipToast: true });
-        if (!isMounted) return;
-
-        if (res.data?.database === 'connected') {
-          setDbConnecting(false);
-        } else {
-          setDbConnecting(true);
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        setDbConnecting(true);
-      }
-    };
-
-    checkDbHealth();
-    const interval = setInterval(checkDbHealth, 3000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   const navigateByRole = (userObj) => {
     const role = (userObj?.role || '').toLowerCase();
@@ -69,51 +43,111 @@ const Login = () => {
     }
   };
 
-  const executeLoginWithRetry = async (attempt = 1) => {
+  // Poll database health every 3 seconds for up to 90 seconds
+  useEffect(() => {
+    let isMounted = true;
+    let timer = null;
+
+    const checkServerHealth = async () => {
+      try {
+        const res = await api.get('/health', { skipToast: true });
+        if (!isMounted) return;
+
+        if (res.data?.database === 'connected') {
+          setIsServerWaking(false);
+          setWakeSeconds(0);
+
+          // If user clicked sign-in while server was asleep, auto-submit now
+          if (pendingLoginRef.current) {
+            const pending = pendingLoginRef.current;
+            pendingLoginRef.current = null;
+            executeDirectLogin(pending.email, pending.password, pending.rememberMe);
+          }
+        } else {
+          setIsServerWaking(true);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        setIsServerWaking(true);
+      }
+    };
+
+    // Initial ping
+    checkServerHealth();
+    const interval = setInterval(checkServerHealth, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
+  // Tick seconds while server is waking up (up to 90s)
+  useEffect(() => {
+    let ticker = null;
+    if (isServerWaking) {
+      ticker = setInterval(() => {
+        setWakeSeconds((prev) => {
+          if (prev >= 90) return 90;
+          return prev + 1;
+        });
+      }, 1000);
+    } else {
+      setWakeSeconds(0);
+    }
+    return () => {
+      if (ticker) clearInterval(ticker);
+    };
+  }, [isServerWaking]);
+
+  const executeDirectLogin = async (loginEmail, loginPassword, isRemember) => {
+    setLoading(true);
+    setBackendError('');
+
     try {
       const data = await login({
-        email: email.trim(),
-        password,
-        rememberMe,
+        email: loginEmail.trim(),
+        password: loginPassword,
+        rememberMe: isRemember,
       });
 
-      setRetryStatus('');
       toast.success(`Welcome back, ${data.data?.name || 'User'}!`);
       navigateByRole(data.data);
     } catch (err) {
-      const isDbNotReady =
+      const isSleepingOrNetwork =
         err.response?.status === 503 ||
+        err.response?.status === 502 ||
         err.response?.data?.code === 'DB_NOT_CONNECTED' ||
-        (err.message && err.message.includes('Network Error'));
+        !err.response ||
+        (err.message && (err.message.includes('Network Error') || err.message.includes('timeout')));
 
-      if (isDbNotReady && attempt < 5) {
-        setDbConnecting(true);
-        setRetryStatus(`Database connecting... Automatically retrying (${attempt}/5) in 2s`);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        return executeLoginWithRetry(attempt + 1);
+      if (isSleepingOrNetwork) {
+        setIsServerWaking(true);
+        pendingLoginRef.current = { email: loginEmail, password: loginPassword, rememberMe: isRemember };
       } else {
-        setRetryStatus('');
-        if (isDbNotReady) {
-          setDbConnecting(true);
-          setBackendError('Server is connecting to the database. Please wait a few seconds.');
-        } else {
-          const message =
-            err.response?.data?.message || err.message || 'Invalid email or password';
-          setBackendError(message);
-        }
+        const message = err.response?.data?.message || err.message || 'Invalid email or password';
+        setBackendError(message);
       }
     } finally {
-      if (attempt === 1 || attempt >= 5) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setBackendError('');
-    setLoading(true);
-    await executeLoginWithRetry(1);
+
+    if (isServerWaking) {
+      // Save credentials to auto-login once server wakes
+      pendingLoginRef.current = { email, password, rememberMe };
+      toast('Server is waking up. Your login will proceed automatically once ready.', {
+        icon: '⏳',
+      });
+      return;
+    }
+
+    await executeDirectLogin(email, password, rememberMe);
   };
 
   const handleGoogleSuccess = async (credential) => {
@@ -126,7 +160,7 @@ const Login = () => {
       navigateByRole(data.data);
     } catch (err) {
       if (err.response?.status === 503 || err.response?.data?.code === 'DB_NOT_CONNECTED') {
-        setDbConnecting(true);
+        setIsServerWaking(true);
       } else {
         const message =
           err.response?.data?.message || err.message || 'Google authentication failed';
@@ -225,24 +259,33 @@ const Login = () => {
             </div>
           )}
 
-          {/* Small orange notice: database connecting */}
-          {dbConnecting && (
-            <div className="mb-5 p-3 rounded-xl border bg-[#FFF8EB] border-[#FDE68A] text-[#92400E] flex items-center gap-2.5 text-xs font-semibold leading-relaxed animate-fade-in shadow-2xs">
-              <RefreshCw size={15} className="shrink-0 text-[#D97706] animate-spin" />
-              <span>Connecting to the database, please wait...</span>
+          {/* Render Free Tier Cold Start Notice */}
+          {isServerWaking && (
+            <div className="mb-5 p-4 rounded-xl border bg-[#E2F6F3] border-[#12A58B]/40 text-[#0B7260] shadow-xs animate-fade-in">
+              <div className="flex items-start gap-3">
+                <RefreshCw size={18} className="shrink-0 text-[#12A58B] animate-spin mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold leading-snug">
+                    Server is waking up. This can take up to a minute on the free plan, please wait...
+                  </p>
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-[#0E8C76] mt-2 mb-1">
+                    <span>Establishing connection</span>
+                    <span className="tabular-nums font-mono">{wakeSeconds}s / 90s</span>
+                  </div>
+                  {/* Visual Progress Bar */}
+                  <div className="w-full bg-[#12A58B]/20 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-[#12A58B] h-full transition-all duration-1000 ease-linear rounded-full"
+                      style={{ width: `${Math.min(100, Math.max(8, (wakeSeconds / 90) * 100))}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Auto-retry notice */}
-          {retryStatus && (
-            <div className="mb-5 p-3 rounded-xl border bg-[#EFF6FF] border-[#BFDBFE] text-[#1E40AF] flex items-center gap-2.5 text-xs font-semibold animate-pulse">
-              <RefreshCw size={14} className="shrink-0 animate-spin text-[#3B82F6]" />
-              <span>{retryStatus}</span>
-            </div>
-          )}
-
-          {/* General authentication error banner */}
-          {backendError && (
+          {/* General authentication error banner (suppressed while waking) */}
+          {!isServerWaking && backendError && (
             <div className="mb-5 p-3.5 rounded-xl border bg-[#FEE2E2] border-[#FECACA] text-[#E5484D] flex items-start gap-3 text-xs font-semibold leading-relaxed animate-shake">
               <AlertCircle size={18} className="shrink-0 text-[#E5484D] mt-0.5" />
               <div>
@@ -302,6 +345,11 @@ const Login = () => {
                 <span className="flex items-center justify-center gap-2">
                   <RefreshCw size={16} className="animate-spin" />
                   <span>Verifying credentials...</span>
+                </span>
+              ) : isServerWaking ? (
+                <span className="flex items-center justify-center gap-2">
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Waking server ({wakeSeconds}s)...</span>
                 </span>
               ) : (
                 'Sign In to Terminal'

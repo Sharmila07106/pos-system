@@ -34,9 +34,16 @@ import Settings from './pages/platform/Settings';
 import RoleRoute from './components/auth/RoleRoute';
 
 function App() {
+  const isMissingApiUrl = import.meta.env.PROD && !import.meta.env.VITE_API_URL;
+
   return (
     <AuthProvider>
       <Router>
+        {isMissingApiUrl && (
+          <div className="bg-[#E5484D] text-white text-xs font-bold px-4 py-2.5 text-center sticky top-0 z-[100] shadow-md flex items-center justify-center gap-2">
+            <span>⚠️ Configuration Notice: VITE_API_URL is missing in this Vercel deployment. Please add VITE_API_URL=https://YOUR-BACKEND.onrender.com/api in your Vercel Project Settings and redeploy.</span>
+          </div>
+        )}
         <Toaster
           position="top-right"
           toastOptions={{
