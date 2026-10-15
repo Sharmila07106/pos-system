@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const {
   getProducts,
   getProductById,
@@ -20,22 +19,8 @@ const {
   forbidPlatformAdmin,
 } = require('../middleware/authMiddleware');
 
-// Ensure destination directory exists: server/uploads/products
-const uploadDir = path.join(__dirname, '..', 'uploads', 'products');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Multer config for image upload (max 2MB, jpg/jpeg/png/webp)
-const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename(req, file, cb) {
-    const cleanExt = path.extname(file.originalname).toLowerCase();
-    cb(null, `product-${Date.now()}-${Math.round(Math.random() * 1e9)}${cleanExt}`);
-  },
-});
+// Multer memory storage (max 2MB, png/jpg/jpeg/webp) for stateless cloud deployment
+const storage = multer.memoryStorage();
 
 const checkFileType = (file, cb) => {
   const filetypes = /jpg|jpeg|png|webp/;

@@ -1,6 +1,7 @@
 /**
  * StoreFlow Product Image Matching Utility (Client)
  * Automatically matches product keywords and categories to local vector illustrations
+ * and resolves absolute image URLs from the API origin
  */
 
 export const PRODUCT_IMAGE_MAP = [
@@ -67,6 +68,21 @@ export function getSuggestedProductImage(name = '', category = '') {
 }
 
 /**
+ * Returns API origin from VITE_API_URL (removes trailing /api)
+ */
+export function getApiOrigin() {
+  const apiUrl = import.meta.env.VITE_API_URL || '';
+  if (apiUrl) {
+    return apiUrl.replace(/\/api\/?$/, '');
+  }
+  // In development, fall back to localhost:5090
+  if (import.meta.env.DEV) {
+    return 'http://localhost:5090';
+  }
+  return '';
+}
+
+/**
  * Resolves full usable image URL for any product object
  */
 export function resolveProductImage(product) {
@@ -74,11 +90,13 @@ export function resolveProductImage(product) {
   const img = product.imageUrl || product.image;
 
   if (img && typeof img === 'string' && img.trim().length > 0) {
-    if (img.startsWith('http') || img.startsWith('/product-images/')) {
+    if (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/product-images/')) {
       return img;
     }
-    if (img.startsWith('/uploads/')) {
-      return `http://localhost:5090${img}`;
+    // Stored in MongoDB (/api/images/...) or legacy upload (/uploads/...)
+    if (img.startsWith('/api/images/') || img.startsWith('/uploads/')) {
+      const origin = getApiOrigin();
+      return `${origin}${img}`;
     }
     return img;
   }

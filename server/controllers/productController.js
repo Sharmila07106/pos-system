@@ -1,8 +1,16 @@
 const Product = require('../models/Product');
+const ProductImage = require('../models/ProductImage');
 const asyncHandler = require('express-async-handler');
 const mongoose = require('mongoose');
 
-// Empty memory fallback for tests / backward compatibility
+// Helper to extract MongoDB image document ID from imageUrl string (/api/images/<id>)
+function extractImageId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const match = url.match(/\/api\/images\/([a-fA-F0-9]{24})/);
+  return match ? match[1] : null;
+}
+
+// Empty memory fallback for backward compatibility
 const memoryProducts = [];
 
 // @desc    Get all products for the current supermarket store
@@ -146,11 +154,6 @@ const createProduct = asyncHandler(async (req, res) => {
   const sku = body.sku ? body.sku.trim() : '';
   const costPrice = body.costPrice !== undefined ? Number(body.costPrice) : 0;
   
-  // Support uploaded photo, explicit imageUrl, or body image
-  const resolvedImage = req.file
-    ? `/uploads/products/${req.file.filename}`
-    : (body.imageUrl || body.image || '');
-
   if (!name) {
     res.status(400);
     throw new Error('Product name is required');
@@ -169,6 +172,20 @@ const createProduct = asyncHandler(async (req, res) => {
   if (productExists) {
     res.status(400);
     throw new Error('Product with this barcode already exists in your supermarket');
+  }
+
+  let resolvedImage = body.imageUrl || body.image || '';
+
+  // Store uploaded image directly in MongoDB
+  if (req.file) {
+    const imageDoc = await ProductImage.create({
+      store: storeId,
+      filename: req.file.originalname || `${barcode}.jpg`,
+      contentType: req.file.mimetype || 'image/jpeg',
+      size: req.file.size || req.file.buffer.length,
+      data: req.file.buffer,
+    });
+    resolvedImage = `/api/images/${imageDoc._id}`;
   }
 
   const product = await Product.create({
@@ -220,14 +237,40 @@ const updateProduct = asyncHandler(async (req, res) => {
   }
 
   const updateData = { ...body };
+
+  // Handle image replacement in MongoDB
   if (req.file) {
-    const uploadedUrl = `/uploads/products/${req.file.filename}`;
-    updateData.image = uploadedUrl;
-    updateData.imageUrl = uploadedUrl;
+    const oldImgId = extractImageId(product.imageUrl || product.image);
+    if (oldImgId) {
+      await ProductImage.findByIdAndDelete(oldImgId).catch(() => {});
+    }
+
+    const imageDoc = await ProductImage.create({
+      store: product.store,
+      product: product._id,
+      filename: req.file.originalname || `${product.barcode}.jpg`,
+      contentType: req.file.mimetype || 'image/jpeg',
+      size: req.file.size || req.file.buffer.length,
+      data: req.file.buffer,
+    });
+
+    const newUrl = `/api/images/${imageDoc._id}`;
+    updateData.image = newUrl;
+    updateData.imageUrl = newUrl;
   } else if (body.imageUrl !== undefined) {
+    const oldImgId = extractImageId(product.imageUrl || product.image);
+    const newImgId = extractImageId(body.imageUrl);
+    if (oldImgId && oldImgId !== newImgId) {
+      await ProductImage.findByIdAndDelete(oldImgId).catch(() => {});
+    }
     updateData.imageUrl = body.imageUrl;
     updateData.image = body.imageUrl;
   } else if (body.image !== undefined) {
+    const oldImgId = extractImageId(product.imageUrl || product.image);
+    const newImgId = extractImageId(body.image);
+    if (oldImgId && oldImgId !== newImgId) {
+      await ProductImage.findByIdAndDelete(oldImgId).catch(() => {});
+    }
     updateData.imageUrl = body.image;
     updateData.image = body.image;
   }
@@ -269,13 +312,19 @@ const deleteProduct = asyncHandler(async (req, res) => {
     throw new Error('Unauthorized access to product from another store');
   }
 
+  // Clean up any MongoDB image associated with this product
+  const imgId = extractImageId(product.imageUrl || product.image);
+  if (imgId) {
+    await ProductImage.findByIdAndDelete(imgId).catch(() => {});
+  }
+
   product.isActive = false;
   await product.save();
 
   return res.json({ success: true, message: 'Product deactivated successfully' });
 });
 
-// @desc    Upload product image
+// @desc    Upload product image directly into MongoDB
 // @route   POST /api/products/upload-image
 // @access  Private/Admin
 const uploadImage = asyncHandler(async (req, res) => {
@@ -284,7 +333,15 @@ const uploadImage = asyncHandler(async (req, res) => {
     throw new Error('No image file provided');
   }
 
-  const imageUrl = `/uploads/products/${req.file.filename}`;
+  const imageDoc = await ProductImage.create({
+    store: req.storeId || null,
+    filename: req.file.originalname || `upload-${Date.now()}.jpg`,
+    contentType: req.file.mimetype || 'image/jpeg',
+    size: req.file.size || req.file.buffer.length,
+    data: req.file.buffer,
+  });
+
+  const imageUrl = `/api/images/${imageDoc._id}`;
   return res.json({
     success: true,
     imageUrl,
