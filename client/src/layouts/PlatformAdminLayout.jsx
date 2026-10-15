@@ -7,7 +7,6 @@ import {
   Users,
   AlertTriangle,
   Download,
-  Activity,
   Palette,
   Settings,
   ChevronLeft,
@@ -149,7 +148,7 @@ export default function PlatformAdminLayout() {
       path: '/platform-admin/applications',
       end: false,
       icon: FileText,
-      badge: badges.pendingApplications,
+      badge: badges.pendingApplications > 0 ? badges.pendingApplications : null,
       badgeColor: 'bg-[#F59E0B] text-white',
     },
     {
@@ -171,7 +170,7 @@ export default function PlatformAdminLayout() {
       path: '/platform-admin/complaints',
       end: false,
       icon: AlertTriangle,
-      badge: badges.openComplaints,
+      badge: badges.openComplaints > 0 ? badges.openComplaints : null,
       badgeColor: 'bg-[#EF4444] text-white',
     },
     {
@@ -179,13 +178,6 @@ export default function PlatformAdminLayout() {
       path: '/platform-admin/reports',
       end: false,
       icon: Download,
-      badge: null,
-    },
-    {
-      name: 'Audit Trail',
-      path: '/platform-admin/audit',
-      end: false,
-      icon: Activity,
       badge: null,
     },
     {

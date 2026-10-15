@@ -23,12 +23,12 @@ export default function Reports() {
       id: 'summary',
       title: 'Executive Multi-Tenant Platform Summary',
       description:
-        'Comprehensive multi-page audit summary covering supermarket registrations, tenant operational status, compliance approvals, and core KPI metrics.',
+        'Comprehensive multi-page operational summary covering supermarket registrations, tenant operational status, compliance approvals, and core KPI metrics.',
       endpoint: '/platform/reports/summary.pdf',
       filename: 'StoreFlow_Platform_Executive_Summary.pdf',
       icon: FileCheck,
-      color: 'bg-[#0FA38F]/10 text-[#0FA38F] border-[#0FA38F]/30',
-      badge: 'Executive Audit',
+      color: 'bg-[#12A58B]/10 text-[#12A58B] border-[#12A58B]/30',
+      badge: 'Executive Summary',
     },
     {
       id: 'stores',
@@ -43,20 +43,20 @@ export default function Reports() {
     },
     {
       id: 'staff',
-      title: 'Staff Access & Role Permissions Audit',
+      title: 'Staff Access & Role Permissions Report',
       description:
-        'Security compliance document listing all supermarket personnel, store assignment, designated roles (Store Admin, Cashier, Inventory), and active logins.',
+        'Compliance roster listing all supermarket personnel, store assignment, designated roles (Store Admin, Cashier), and active status.',
       endpoint: '/platform/reports/staff.pdf',
-      filename: 'StoreFlow_Staff_Access_Audit.pdf',
+      filename: 'StoreFlow_Staff_Access_Report.pdf',
       icon: Users,
       color: 'bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/30',
-      badge: 'Access & Compliance',
+      badge: 'Staff & Roles',
     },
     {
       id: 'complaints',
       title: 'Supermarket Complaints & Ticket Resolutions',
       description:
-        'Formal incident report detailing all support tickets raised by supermarkets, resolution timeliness, priority categorizations, and admin actions taken.',
+        'Formal incident report detailing all support tickets raised by supermarkets, resolution timeliness, priority categorizations, and actions taken.',
       endpoint: '/platform/reports/complaints.pdf',
       filename: 'StoreFlow_Complaints_Report.pdf',
       icon: AlertTriangle,

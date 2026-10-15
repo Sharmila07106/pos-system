@@ -27,7 +27,6 @@ import RegisteredStores from './pages/platform/RegisteredStores';
 import StaffAccess from './pages/platform/StaffAccess';
 import Complaints from './pages/platform/Complaints';
 import Reports from './pages/platform/Reports';
-import AuditTrail from './pages/platform/AuditTrail';
 import Appearance from './pages/platform/Appearance';
 import Settings from './pages/platform/Settings';
 
@@ -85,7 +84,7 @@ function App() {
               <Route path="staff" element={<StaffAccess />} />
               <Route path="complaints" element={<Complaints />} />
               <Route path="reports" element={<Reports />} />
-              <Route path="audit" element={<AuditTrail />} />
+              <Route path="audit" element={<Navigate to="/platform-admin" replace />} />
               <Route path="appearance" element={<Appearance />} />
               <Route path="settings" element={<Settings />} />
             </Route>

@@ -7,7 +7,6 @@ const {
   getStores,
   updateStoreStatus,
   getPlatformStats,
-  getAuditLogs,
   getApplicationsTrend,
   getStatusBreakdown,
   getStoresGrowth,
@@ -31,9 +30,8 @@ const { protect, platformAdminOnly } = require('../middleware/authMiddleware');
 router.use(protect);
 router.use(platformAdminOnly);
 
-// Stats & Audits
+// Stats
 router.get('/stats', getPlatformStats);
-router.get('/audit-logs', getAuditLogs);
 
 // Store Applications
 router.get('/applications', getApplications);
