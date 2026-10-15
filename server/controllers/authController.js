@@ -812,25 +812,10 @@ const activateStaff = async (req, res) => {
     }
 
     // Verify staff limits before activating
-    const isInvManager = ['INVENTORY_MANAGER', 'inventory_manager'].includes(invite.role);
     const isCashier = ['CASHIER', 'cashier'].includes(invite.role);
-    const maxInventoryStaff = storeDoc?.maxInventoryStaff ?? 5;
     const maxCashiers = storeDoc?.maxCashiers ?? 10;
 
-    if (isInvManager) {
-      const activeCount = await User.countDocuments({
-        store: invite.store,
-        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
-        isActive: true,
-      });
-      if (activeCount >= maxInventoryStaff) {
-        return res.status(400).json({
-          success: false,
-          code: 'STAFF_LIMIT_EXCEEDED',
-          message: `Inventory staff limit reached (${activeCount}/${maxInventoryStaff}). Please contact your store administrator.`,
-        });
-      }
-    } else if (isCashier) {
+    if (isCashier) {
       const activeCount = await User.countDocuments({
         store: invite.store,
         role: { $in: ['CASHIER', 'cashier'] },

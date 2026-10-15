@@ -21,7 +21,7 @@ const invitationSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['INVENTORY_MANAGER', 'CASHIER', 'inventory_manager', 'cashier'],
+      enum: ['CASHIER', 'cashier'],
       required: true,
     },
     token: {
@@ -47,6 +47,10 @@ const invitationSchema = new mongoose.Schema(
     },
     acceptedAt: {
       type: Date,
+    },
+    acceptedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {

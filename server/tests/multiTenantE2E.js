@@ -581,8 +581,8 @@ async function runMultiTenantTestSuite() {
       );
       await inviteStaff(req, res);
       assert(
-        res.statusCode === 400 && res.data?.message?.includes('inventory_manager or cashier'),
-        'Invite rejects unauthorized role (only inventory_manager or cashier permitted)'
+        res.statusCode === 400 && res.data?.message?.includes('cashier'),
+        'Invite rejects unauthorized role (only cashier permitted)'
       );
     }
 
@@ -800,29 +800,29 @@ async function runMultiTenantTestSuite() {
   // TEST 9: Role Boundaries & Cross-Tenant Isolation Negative Tests
   console.log('\n--- SUITE 7: Role Permissions & Cross-Tenant Isolation Negative Tests ---');
   {
-    // Sub-test 7.1: Cashier calling POST /api/products directly gets 403
+    // Sub-test 7.1: Cashier calling DELETE /api/products directly gets 403
     {
-      const canManageProducts = requireRole(
+      const canDeleteProducts = requireRole(
         'store_admin',
         'STORE_ADMIN',
         'STORE_OWNER',
-        'inventory_manager',
+        'admin',
         'ADMIN'
       );
       const { req, res } = mockReqRes(
-        { name: 'Illegal Cashier Product', price: 100 },
         {},
         {},
+        { id: 'prod_1' },
         { _id: 'cashier_user_1', role: 'CASHIER' },
         'store_test_id'
       );
       let nextCalled = false;
-      canManageProducts(req, res, () => {
+      canDeleteProducts(req, res, () => {
         nextCalled = true;
       });
       assert(
         res.statusCode === 403 && !nextCalled,
-        'Negative Test: Cashier calling POST /api/products directly gets 403 Forbidden'
+        'Negative Test: Cashier calling DELETE /api/products directly gets 403 Forbidden'
       );
     }
 
@@ -842,19 +842,20 @@ async function runMultiTenantTestSuite() {
       );
     }
 
-    // Sub-test 7.3: Inventory Manager calling GET /api/sales gets 403
+    // Sub-test 7.3: Cashier calling deleteProduct controller gets 403
     {
+      const { deleteProduct } = require('../controllers/productController');
       const { req, res } = mockReqRes(
         {},
         {},
-        {},
-        { _id: 'inv_user_1', role: 'INVENTORY_MANAGER' },
+        { id: 'prod_1' },
+        { _id: 'cashier_user_1', role: 'CASHIER' },
         'store_test_id'
       );
-      await getSales(req, res);
+      await deleteProduct(req, res);
       assert(
-        res.statusCode === 403 && res.data?.message?.includes('Inventory managers cannot access sales history'),
-        'Negative Test: Inventory Manager calling GET /api/sales gets 403 Forbidden'
+        res.statusCode === 403 && res.data?.message?.includes("don't have permission"),
+        'Negative Test: Cashier calling deleteProduct gets 403 Forbidden'
       );
     }
 
@@ -1202,21 +1203,24 @@ async function runMultiTenantTestSuite() {
         'Store admin can export sales history as CSV report with headers and totals'
       );
 
-      // Sub-test 8.7: Inventory manager is forbidden from exporting sales CSV (403)
-      const { req: invReq, res: invRes } = mockReqRes(
+      // Sub-test 8.7: Platform Admin is forbidden from direct store sales operations (403)
+      const { forbidPlatformAdmin } = require('../middleware/authMiddleware');
+      const { req: pReq, res: pRes } = mockReqRes(
         {},
         {},
         {},
-        { _id: 'inv_1', role: 'INVENTORY_MANAGER' },
+        { _id: 'plat_1', role: 'PLATFORM_SUPER_ADMIN', isPlatformAdmin: true },
         mockStoreId
       );
 
-      await exportSalesCsv(invReq, invRes);
+      let allowed = false;
+      forbidPlatformAdmin(pReq, pRes, () => {
+        allowed = true;
+      });
 
       assert(
-        invRes.statusCode === 403 &&
-          invRes.data?.message?.includes('Inventory managers cannot export sales data'),
-        'Inventory Manager calling GET /api/sales/export.csv gets 403 Forbidden'
+        !allowed && pRes.statusCode === 403,
+        'Platform Admin calling store sales route gets 403 Forbidden'
       );
 
       Sale.find = origSaleFind;

@@ -234,6 +234,14 @@ const updateProduct = asyncHandler(async (req, res) => {
 // @route   DELETE /api/products/:id
 // @access  Private/Admin
 const deleteProduct = asyncHandler(async (req, res) => {
+  const role = (req.user?.role || '').toLowerCase();
+  if (role === 'cashier') {
+    return res.status(403).json({
+      success: false,
+      message: "You don't have permission to do this",
+    });
+  }
+
   const product = await Product.findById(req.params.id);
   if (!product) {
     res.status(404);

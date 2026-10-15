@@ -14,18 +14,22 @@ const {
   protect,
   requireActiveStore,
   requireRole,
+  forbidPlatformAdmin,
 } = require('../middleware/authMiddleware');
 
 router.use(protect);
 router.use(requireActiveStore);
+router.use(forbidPlatformAdmin);
 
+// Store Admins and Cashiers manage inventory and stock levels
 const canManageInventory = requireRole(
   'store_admin',
   'STORE_ADMIN',
   'STORE_OWNER',
+  'admin',
   'ADMIN',
-  'inventory_manager',
-  'INVENTORY_MANAGER'
+  'cashier',
+  'CASHIER'
 );
 
 router.use(canManageInventory);

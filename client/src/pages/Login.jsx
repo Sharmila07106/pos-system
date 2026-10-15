@@ -66,8 +66,6 @@ const Login = () => {
       navigate('/platform-admin');
     } else if (role === 'cashier') {
       navigate('/pos');
-    } else if (role === 'inventory_manager') {
-      navigate('/inventory');
     } else {
       navigate('/dashboard');
     }

@@ -155,13 +155,16 @@ const inviteStaff = async (req, res) => {
     }
 
     const normalizedRole = (role || '').toUpperCase();
-    if (
-      normalizedRole !== 'INVENTORY_MANAGER' &&
-      normalizedRole !== 'CASHIER'
-    ) {
+    if (normalizedRole === 'INVENTORY_MANAGER' || normalizedRole === 'INVENTORY-MANAGER') {
       return res.status(400).json({
         success: false,
-        message: 'Role must be either inventory_manager or cashier',
+        message: 'The inventory manager role is no longer supported. Staff role must be cashier.',
+      });
+    }
+    if (normalizedRole !== 'CASHIER') {
+      return res.status(400).json({
+        success: false,
+        message: 'Role must be cashier',
       });
     }
 
@@ -182,30 +185,7 @@ const inviteStaff = async (req, res) => {
     if (storeId) {
       storeDoc = await Store.findById(storeId).catch(() => null);
     }
-    const maxInventoryStaff = storeDoc?.maxInventoryStaff ?? 5;
     const maxCashiers = storeDoc?.maxCashiers ?? 10;
-
-    if (normalizedRole === 'INVENTORY_MANAGER') {
-      const activeCount = await User.countDocuments({
-        store: storeId,
-        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
-        isActive: true,
-      });
-      const pendingCount = await Invitation.countDocuments({
-        store: storeId,
-        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
-        status: 'PENDING',
-        expiresAt: { $gt: new Date() },
-      });
-
-      if (activeCount + pendingCount >= maxInventoryStaff) {
-        return res.status(400).json({
-          success: false,
-          code: 'STAFF_LIMIT_EXCEEDED',
-          message: `Inventory staff limit reached (${activeCount + pendingCount}/${maxInventoryStaff}). Please adjust staff limits in store settings.`,
-        });
-      }
-    } else if (normalizedRole === 'CASHIER') {
       const activeCount = await User.countDocuments({
         store: storeId,
         role: { $in: ['CASHIER', 'cashier'] },
@@ -225,7 +205,6 @@ const inviteStaff = async (req, res) => {
           message: `Cashier staff limit reached (${activeCount + pendingCount}/${maxCashiers}). Please adjust staff limits in store settings.`,
         });
       }
-    }
 
     // Check if user is already registered in DB
     const existingUser = await User.findOne({ email: cleanEmail });
@@ -384,30 +363,16 @@ const createUser = async (req, res) => {
     }
 
     // Role check and limits
-    const allowedRoles = ['INVENTORY_MANAGER', 'CASHIER', 'STORE_OWNER', 'ADMIN'];
+    const allowedRoles = ['CASHIER', 'STORE_OWNER', 'STORE_ADMIN', 'ADMIN'];
     const assignedRole = allowedRoles.includes(role) ? role : 'CASHIER';
 
     let storeDoc = null;
     if (storeId) {
       storeDoc = await Store.findById(storeId).catch(() => null);
     }
-    const maxInventoryStaff = storeDoc?.maxInventoryStaff ?? 5;
     const maxCashiers = storeDoc?.maxCashiers ?? 10;
 
-    if (assignedRole === 'INVENTORY_MANAGER') {
-      const activeCount = await User.countDocuments({
-        store: storeId,
-        role: { $in: ['INVENTORY_MANAGER', 'inventory_manager'] },
-        isActive: true,
-      });
-      if (activeCount >= maxInventoryStaff) {
-        return res.status(400).json({
-          success: false,
-          code: 'STAFF_LIMIT_EXCEEDED',
-          message: `Inventory staff limit reached (${activeCount}/${maxInventoryStaff}).`,
-        });
-      }
-    } else if (assignedRole === 'CASHIER') {
+    if (assignedRole === 'CASHIER') {
       const activeCount = await User.countDocuments({
         store: storeId,
         role: { $in: ['CASHIER', 'cashier'] },
@@ -495,7 +460,7 @@ const updateUser = async (req, res) => {
     }
 
     if (name) user.name = name.trim();
-    if (role && ['STORE_OWNER', 'STORE_ADMIN', 'ADMIN', 'INVENTORY_MANAGER', 'CASHIER', 'inventory_manager', 'cashier'].includes(role)) {
+    if (role && ['STORE_OWNER', 'STORE_ADMIN', 'ADMIN', 'CASHIER', 'cashier'].includes(role)) {
       user.role = role;
     }
     if (status && ['Active', 'Disabled'].includes(status)) {

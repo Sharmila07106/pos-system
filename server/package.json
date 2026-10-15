@@ -9,7 +9,9 @@
     "seed:products": "node utils/seedProducts.js",
     "seed:admin": "node utils/seedPlatformAdmin.js",
     "start": "node server.js",
-    "seed": "node seed/seedDemoData.js"
+    "seed": "node seed/seedDemoData.js",
+    "seed:all": "node seed/seedAll.js",
+    "migrate:remove-inventory-manager": "node scripts/removeInventoryManagerRole.js"
   },
   "keywords": [],
   "author": "",

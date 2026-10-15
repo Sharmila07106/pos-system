@@ -15,12 +15,6 @@ const getDashboardStats = asyncHandler(async (req, res) => {
       message: 'Access denied: Cashiers cannot view store revenue or financial dashboard.',
     });
   }
-  if (userRole === 'inventory_manager') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Inventory managers cannot view store revenue or financial dashboard.',
-    });
-  }
 
   const storeId = req.storeId
     ? mongoose.Types.ObjectId.isValid(req.storeId)

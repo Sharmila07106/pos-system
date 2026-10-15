@@ -14,17 +14,18 @@ StoreFlow is a multi-tenant retail point-of-sale (POS) and inventory management 
 
 ## Role Matrix & Access Control
 
-| Feature / Permission | Platform Super Admin | Store Admin (`store_admin`) | Inventory Manager (`inventory_manager`) | Cashier (`cashier`) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Platform Store Approvals** |  Full Access |  Blocked (403) |  Blocked (403) |  Blocked (403) |
-| **Store KPI Dashboard & Revenue** |  Blocked (Tenant isolate) |  Full Access |  Blocked (403) |  Blocked (403) |
-| **Staff Invites & Staff Limits** |  Blocked |  Full Access |  Blocked (403) |  Blocked (403) |
-| **Product CRUD & Pricing** |  Blocked |  Full Access |  Full Access |  Read-Only (POS lookup) |
-| **Stock Adjustments & Movements** |  Blocked |  Full Access |  Full Access |  Automatic via Sale |
-| **POS Terminal & Checkout** |  Blocked |  Blocked |  Blocked |  Full Access |
-| **Bill Hold / Resume (F4)** |  Blocked |  Blocked |  Blocked |  Full Access |
-| **Sales History & Z-Report** |  Blocked |  Full Access + Refunds |  Blocked (403) |  Own Bills Only |
-| **Tax / GST & Receipt Settings** |  Blocked |  Full Access |  Blocked (403) |  Blocked (403) |
+| Feature / Permission | Platform Super Admin | Store Admin (`STORE_ADMIN`) | Cashier (`CASHIER`) |
+| :--- | :---: | :---: | :---: |
+| **Platform Store Approvals** |  Full Access |  Blocked (403) |  Blocked (403) |
+| **Store KPI Dashboard & Revenue** |  Blocked (Tenant isolate) |  Full Access |  Blocked (403) |
+| **Staff Invites & Staff Limits** |  Blocked |  Full Access |  Blocked (403) |
+| **Product View / Add / Edit** |  Blocked |  Full Access |  Full Access |
+| **Product Delete** |  Blocked |  Full Access |  Blocked (403) |
+| **Stock Adjustments & Inward** |  Blocked |  Full Access |  Full Access |
+| **POS Terminal & Checkout** |  Blocked |  Blocked |  Full Access |
+| **Bill Hold / Resume (F4)** |  Blocked |  Blocked |  Full Access |
+| **Sales History & Z-Report** |  Blocked |  Full Access + Refunds |  Own Bills Only |
+| **Tax / GST & Receipt Settings** |  Blocked |  Full Access |  Blocked (403) |
 
 ---
 

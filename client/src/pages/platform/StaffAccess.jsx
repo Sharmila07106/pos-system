@@ -80,13 +80,6 @@ export default function StaffAccess() {
         </span>
       );
     }
-    if (r.includes('INVENTORY')) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#FEF3C7] text-[#D97706] border border-[#F59E0B]/30">
-          <Store size={12} /> INVENTORY
-        </span>
-      );
-    }
     return (
       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#F1F5F9] text-[#64748B] border border-[#CBD5E1]">
         {r}
@@ -165,7 +158,6 @@ export default function StaffAccess() {
               <option value="ALL">All Staff Roles</option>
               <option value="store_admin">Store Admin / Owner</option>
               <option value="cashier">Cashier</option>
-              <option value="inventory_manager">Inventory Manager</option>
             </select>
           </div>
         </div>

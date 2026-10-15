@@ -7,8 +7,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Name is required'],
       trim: true,
-      minlength: [2, 'Name must be at least 2 characters'],
-      maxlength: [60, 'Name cannot exceed 60 characters'],
     },
     email: {
       type: String,
@@ -16,7 +14,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
+      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
       index: true,
     },
     password: {
@@ -31,12 +29,13 @@ const userSchema = new mongoose.Schema(
         'PLATFORM_ADMIN',
         'STORE_ADMIN',
         'STORE_OWNER',
-        'INVENTORY_MANAGER',
         'CASHIER',
         'ADMIN',
         'platform_super_admin',
+        'platform_admin',
         'store_admin',
-        'inventory_manager',
+        'store_owner',
+        'admin',
         'cashier',
       ],
       required: [true, 'User role is required'],
@@ -59,17 +58,8 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['Active', 'Disabled'],
+      enum: ['Active', 'Pending', 'Suspended', 'Disabled'],
       default: 'Active',
-    },
-    phone: {
-      type: String,
-      default: '',
-      trim: true,
-    },
-    googleId: {
-      type: String,
-      default: null,
       index: true,
     },
     authProvider: {
@@ -77,11 +67,24 @@ const userSchema = new mongoose.Schema(
       enum: ['LOCAL', 'GOOGLE'],
       default: 'LOCAL',
     },
-    lastLoginAt: {
-      type: Date,
+    googleId: {
+      type: String,
+      default: null,
+      sparse: true,
+    },
+    avatar: {
+      type: String,
       default: null,
     },
-    lastActiveAt: {
+    phone: {
+      type: String,
+      default: null,
+    },
+    address: {
+      type: String,
+      default: null,
+    },
+    lastLoginAt: {
       type: Date,
       default: null,
     },
@@ -90,23 +93,25 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
     preferences: {
-      themeAccent: {
-        type: String,
-        default: '#0FA38F',
+      lowStockAlerts: {
+        type: Boolean,
+        default: true,
       },
-      sidebarStyle: {
-        type: String,
-        enum: ['NAVY', 'CHARCOAL', 'LIGHT'],
-        default: 'NAVY',
+      emailNotifications: {
+        type: Boolean,
+        default: true,
       },
-      density: {
-        type: String,
-        enum: ['COMFORTABLE', 'COMPACT'],
-        default: 'COMFORTABLE',
+      soundEffects: {
+        type: Boolean,
+        default: true,
       },
-      fontScale: {
-        type: String,
-        default: '100%',
+      compactMode: {
+        type: Boolean,
+        default: false,
+      },
+      receiptAutoPrint: {
+        type: Boolean,
+        default: false,
       },
     },
   },
@@ -115,29 +120,19 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-// Hash password before saving
-userSchema.pre('save', async function () {
-  if (this.isModified('password')) {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-  }
-
-  // Ensure Platform Admins have isPlatformAdmin set to true
-  if (this.role === 'PLATFORM_SUPER_ADMIN' || this.role === 'PLATFORM_ADMIN') {
-    this.isPlatformAdmin = true;
-  }
-
-  // Sync isActive and status
-  if (this.isModified('status')) {
-    this.isActive = this.status === 'Active';
-  } else if (this.isModified('isActive')) {
-    this.status = this.isActive ? 'Active' : 'Disabled';
-  }
-});
-
-// Compare entered password with hashed password in database
+// Match user-entered password to hashed password in database
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
+
+// Encrypt password using bcrypt before saving
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) {
+    return;
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
 
 module.exports = mongoose.model('User', userSchema);

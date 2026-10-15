@@ -52,8 +52,5 @@ export default function RoleRoute({ allowedRoles = [] }) {
   if (normalizedRole === 'cashier') {
     return <Navigate to="/pos" replace />;
   }
-  if (normalizedRole === 'inventory_manager') {
-    return <Navigate to="/inventory" replace />;
-  }
   return <Navigate to="/dashboard" replace />;
 }

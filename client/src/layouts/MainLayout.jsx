@@ -64,19 +64,16 @@ const MainLayout = () => {
   } else if (normalizedRole === 'cashier') {
     navItems = [
       { path: '/pos', label: 'POS Checkout', icon: ShoppingCart },
-      { path: '/sales', label: 'My Bills Today', icon: History },
-      { path: '/profile', label: 'Profile', icon: User },
-    ];
-  } else if (normalizedRole === 'inventory_manager') {
-    navItems = [
       { path: '/inventory', label: 'Inventory & Stock', icon: Boxes },
       { path: '/products', label: 'Product Catalogue', icon: Package },
+      { path: '/sales', label: 'My Bills Today', icon: History },
       { path: '/profile', label: 'Profile', icon: User },
     ];
   } else {
     // store_admin / store_owner / admin
     navItems = [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/pos', label: 'POS Terminal', icon: ShoppingCart },
       { path: '/products', label: 'Product Catalogue', icon: Package },
       { path: '/inventory', label: 'Inventory & Stock', icon: Boxes },
       { path: '/sales', label: 'Sales & Reports', icon: History },
@@ -94,12 +91,6 @@ const MainLayout = () => {
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30 uppercase tracking-wider">
             Store Admin
-          </span>
-        );
-      case 'inventory_manager':
-        return (
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#EDE9FE] text-[#7C3AED] border border-[#7C3AED]/30 uppercase tracking-wider">
-            Inventory Manager
           </span>
         );
       case 'cashier':

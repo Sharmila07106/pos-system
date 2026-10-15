@@ -95,16 +95,16 @@ const platformAdminOnly = (req, res, next) => {
   }
   return res.status(403).json({
     success: false,
-    message: 'Access denied: StoreFlow Platform Administrator privileges required',
+    message: "You don't have permission to do this",
   });
 };
 
-// Forbid Platform Admin from executing checkout / POS sales
+// Forbid Platform Admin from executing checkout / POS sales or store stock management
 const forbidPlatformAdmin = (req, res, next) => {
   if (isPlatformSuperAdmin(req.user)) {
     return res.status(403).json({
       success: false,
-      message: 'Platform administrators cannot perform direct store checkout or sales operations.',
+      message: "You don't have permission to do this",
     });
   }
   return next();
@@ -118,13 +118,13 @@ const storeOwnerOnly = (req, res, next) => {
       req.user.role === 'store_admin' ||
       req.user.role === 'STORE_OWNER' ||
       req.user.role === 'ADMIN' ||
-      isPlatformSuperAdmin(req.user))
+      req.user.role === 'admin')
   ) {
     return next();
   }
   return res.status(403).json({
     success: false,
-    message: 'Access denied: Supermarket Owner or Store Administrator privileges required',
+    message: "You don't have permission to do this",
   });
 };
 
@@ -136,11 +136,6 @@ const requireRole = (...allowedRoles) => {
         success: false,
         message: 'Not authorized, please sign in',
       });
-    }
-
-    // Platform admin has broad administrative access across general management endpoints
-    if (isPlatformSuperAdmin(req.user)) {
-      return next();
     }
 
     const userRole = req.user.role;
@@ -166,7 +161,7 @@ const requireRole = (...allowedRoles) => {
 
     return res.status(403).json({
       success: false,
-      message: `Access denied: Requires one of [${allowedRoles.join(', ')}] permissions`,
+      message: "You don't have permission to do this",
     });
   };
 };
@@ -178,14 +173,13 @@ const adminOnly = (req, res, next) => {
     (req.user.role === 'STORE_ADMIN' ||
       req.user.role === 'store_admin' ||
       req.user.role === 'ADMIN' ||
-      req.user.role === 'STORE_OWNER' ||
-      isPlatformSuperAdmin(req.user))
+      req.user.role === 'STORE_OWNER')
   ) {
     return next();
   }
   return res.status(403).json({
     success: false,
-    message: 'Access denied: Administrator privileges required',
+    message: "You don't have permission to do this",
   });
 };
 

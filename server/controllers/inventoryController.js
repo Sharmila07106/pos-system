@@ -269,7 +269,7 @@ const getStockMovements = asyncHandler(async (req, res) => {
 
 // @desc    Perform manual stock adjustment
 // @route   POST /api/inventory/adjust
-// @access  Private (Store Owner / Inventory Manager Only)
+// @access  Private (Store Owner / Cashier Only)
 const adjustStock = asyncHandler(async (req, res) => {
   const storeId = req.storeId;
   if (!storeId) {

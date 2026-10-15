@@ -30,7 +30,7 @@ export default function Users() {
   const [activeTab, setActiveTab] = useState('staff'); // 'staff' | 'invitations'
   const [users, setUsers] = useState([]);
   const [invitations, setInvitations] = useState([]);
-  const [staffLimits, setStaffLimits] = useState({ maxInventoryStaff: 5, maxCashiers: 10 });
+  const [staffLimits, setStaffLimits] = useState({ maxCashiers: 10 });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
@@ -46,7 +46,6 @@ export default function Users() {
 
   // Staff Limits modal state
   const [showLimitsModal, setShowLimitsModal] = useState(false);
-  const [limitMaxInventory, setLimitMaxInventory] = useState(5);
   const [limitMaxCashiers, setLimitMaxCashiers] = useState(10);
   const [savingLimits, setSavingLimits] = useState(false);
 
@@ -65,7 +64,6 @@ export default function Users() {
         setInvitations(res.data.invitations || []);
         if (res.data.staffLimits) {
           setStaffLimits(res.data.staffLimits);
-          setLimitMaxInventory(res.data.staffLimits.maxInventoryStaff ?? 5);
           setLimitMaxCashiers(res.data.staffLimits.maxCashiers ?? 10);
         }
       }
@@ -194,7 +192,6 @@ export default function Users() {
     try {
       setSavingLimits(true);
       const res = await api.put('/users/limits', {
-        maxInventoryStaff: Number(limitMaxInventory),
         maxCashiers: Number(limitMaxCashiers),
       });
       if (res.data?.success) {
@@ -215,12 +212,7 @@ export default function Users() {
   const pendingCashiers = invitations.filter((i) => ['CASHIER', 'cashier'].includes(i.role) && i.status === 'PENDING').length;
   const totalCashiers = activeCashiers + pendingCashiers;
 
-  const activeInventory = users.filter((u) => ['INVENTORY_MANAGER', 'inventory_manager'].includes(u.role) && u.status !== 'Disabled').length;
-  const pendingInventory = invitations.filter((i) => ['INVENTORY_MANAGER', 'inventory_manager'].includes(i.role) && i.status === 'PENDING').length;
-  const totalInventory = activeInventory + pendingInventory;
-
   const isCashierLimitReached = totalCashiers >= (staffLimits.maxCashiers ?? 10);
-  const isInventoryLimitReached = totalInventory >= (staffLimits.maxInventoryStaff ?? 5);
 
   // Filtered staff
   const filteredUsers = users.filter((u) => {
@@ -247,9 +239,6 @@ export default function Users() {
       case 'store_admin':
       case 'ADMIN':
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E2F6F3] text-[#0FA38F] border border-[#0FA38F]/30 uppercase">Store Admin</span>;
-      case 'INVENTORY_MANAGER':
-      case 'inventory_manager':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#EDE9FE] text-[#7C3AED] border border-[#7C3AED]/30 uppercase">Inventory Manager</span>;
       default:
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#E0F2FE] text-[#0284C7] border border-[#0284C7]/30 uppercase">Cashier</span>;
     }
@@ -264,7 +253,7 @@ export default function Users() {
             Staff & Access Management
           </h1>
           <p className="text-sm font-medium text-[#53607A] mt-1">
-            Manage your supermarket cashiers, inventory managers, and role quotas.
+            Manage your supermarket cashiers and role quotas.
           </p>
         </div>
 
@@ -273,7 +262,6 @@ export default function Users() {
             variant="outline"
             size="md"
             onClick={() => {
-              setLimitMaxInventory(staffLimits.maxInventoryStaff ?? 5);
               setLimitMaxCashiers(staffLimits.maxCashiers ?? 10);
               setShowLimitsModal(true);
             }}
@@ -302,7 +290,7 @@ export default function Users() {
       </div>
 
       {/* Stats Quick Ribbon with Quota Capacities */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="p-4 bg-white border-[#E3E8F0] flex items-center justify-between">
           <div>
             <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Active Staff</div>
@@ -327,24 +315,6 @@ export default function Users() {
             )}
           </div>
           <div className="w-10 h-10 rounded-xl bg-[#E0F2FE] text-[#0284C7] flex items-center justify-center font-bold">
-            <Shield size={20} />
-          </div>
-        </Card>
-
-        <Card className="p-4 bg-white border-[#E3E8F0] flex items-center justify-between">
-          <div>
-            <div className="text-xs font-bold text-[#53607A] uppercase tracking-wider">Inventory Quota</div>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className={`text-2xl font-extrabold ${isInventoryLimitReached ? 'text-[#E5484D]' : 'text-[#7C3AED]'}`}>
-                {totalInventory}
-              </span>
-              <span className="text-sm font-semibold text-[#53607A]">/ {staffLimits.maxInventoryStaff ?? 5}</span>
-            </div>
-            {isInventoryLimitReached && (
-              <span className="text-[10px] font-bold text-[#E5484D] uppercase">Limit reached</span>
-            )}
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-[#EDE9FE] text-[#7C3AED] flex items-center justify-center font-bold">
             <Shield size={20} />
           </div>
         </Card>
@@ -404,7 +374,7 @@ export default function Users() {
 
         {activeTab === 'staff' && (
           <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
-            {['ALL', 'CASHIER', 'INVENTORY_MANAGER', 'STORE_OWNER'].map((rf) => (
+            {['ALL', 'CASHIER', 'STORE_OWNER'].map((rf) => (
               <button
                 key={rf}
                 onClick={() => setRoleFilter(rf)}
@@ -722,7 +692,6 @@ export default function Users() {
                     className="w-full p-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0B1B3A] focus:outline-none focus:border-[#0FA38F]"
                   >
                     <option value="CASHIER">CASHIER (Counter Billing, Scan & Tender)</option>
-                    <option value="INVENTORY_MANAGER">INVENTORY MANAGER (Stock In, Batches, Adjustments)</option>
                   </select>
                 </div>
 
@@ -732,15 +701,6 @@ export default function Users() {
                     <AlertCircle size={16} className="shrink-0 mt-0.5" />
                     <span>
                       <strong>Cashier Quota Reached ({totalCashiers}/{staffLimits.maxCashiers}):</strong> You cannot invite more cashiers until you increase the cashier limit or remove an existing cashier.
-                    </span>
-                  </div>
-                )}
-
-                {inviteRole === 'INVENTORY_MANAGER' && isInventoryLimitReached && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
-                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Inventory Staff Quota Reached ({totalInventory}/{staffLimits.maxInventoryStaff}):</strong> You cannot invite more inventory staff until you increase the inventory limit or remove existing staff.
                     </span>
                   </div>
                 )}
@@ -760,8 +720,7 @@ export default function Users() {
                     size="md"
                     disabled={
                       inviting ||
-                      (inviteRole === 'CASHIER' && isCashierLimitReached) ||
-                      (inviteRole === 'INVENTORY_MANAGER' && isInventoryLimitReached)
+                      (inviteRole === 'CASHIER' && isCashierLimitReached)
                     }
                     className="font-bold"
                   >
@@ -796,7 +755,6 @@ export default function Users() {
                 className="w-full p-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0B1B3A] focus:outline-none focus:border-[#0FA38F]"
               >
                 <option value="CASHIER">CASHIER</option>
-                <option value="INVENTORY_MANAGER">INVENTORY_MANAGER</option>
                 <option value="STORE_ADMIN">STORE_ADMIN</option>
               </select>
 
@@ -851,24 +809,6 @@ export default function Users() {
                 />
                 <p className="text-[11px] text-[#53607A] mt-1">
                   Currently active + pending: <strong>{totalCashiers}</strong> cashier(s).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-[#0B1B3A] mb-1.5">
-                  Max Inventory Staff Quota *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  required
-                  value={limitMaxInventory}
-                  onChange={(e) => setLimitMaxInventory(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-[#CBD5E1] rounded-xl text-sm font-semibold text-[#0B1B3A] focus:outline-none focus:border-[#0FA38F]"
-                />
-                <p className="text-[11px] text-[#53607A] mt-1">
-                  Currently active + pending: <strong>{totalInventory}</strong> inventory manager(s).
                 </p>
               </div>
 

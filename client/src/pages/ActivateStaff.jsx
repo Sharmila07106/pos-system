@@ -95,8 +95,6 @@ export default function ActivateStaff() {
         const role = (res.data.data?.role || '').toLowerCase();
         if (role === 'cashier') {
           navigate('/pos');
-        } else if (role === 'inventory_manager') {
-          navigate('/inventory');
         } else {
           navigate('/dashboard');
         }

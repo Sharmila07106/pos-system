@@ -275,12 +275,6 @@ const getSales = asyncHandler(async (req, res) => {
   }
 
   const userRole = (req.user?.role || '').toLowerCase();
-  if (userRole === 'inventory_manager') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Inventory managers cannot access sales history or revenue data.',
-    });
-  }
 
   const { search, page = 1, limit = 20, startDate, endDate, status, paymentMethod } = req.query;
   const query = { store: storeId };
@@ -507,12 +501,6 @@ const refundSale = asyncHandler(async (req, res) => {
 // @access  Private (Store Staff Only)
 const exportSalesCsv = asyncHandler(async (req, res) => {
   const userRole = (req.user?.role || '').toLowerCase();
-  if (userRole === 'inventory_manager') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied: Inventory managers cannot export sales data.',
-    });
-  }
 
   const storeId = req.storeId;
   if (!storeId) {

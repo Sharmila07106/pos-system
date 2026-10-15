@@ -84,7 +84,7 @@ This audit report verifies the real state of the repository, identifying what ex
   - Account status check (`status !== 'Disabled'`).
 - **Required Enhancements**:
   - Introduce `PLATFORM_ADMIN` vs `STORE_OWNER` / `STORE_ADMIN` hierarchy.
-  - Add `requireRole(['STORE_OWNER', 'INVENTORY_MANAGER'])` authorization helpers.
+  - Add `requireRole(['STORE_OWNER', 'CASHIER'])` authorization helpers.
   - Add `storeScope` middleware ensuring `req.user.storeId` matches the requested resource.
 
 ---

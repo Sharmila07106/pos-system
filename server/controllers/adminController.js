@@ -35,7 +35,7 @@ const getOverview = async (req, res) => {
 
     // 2. Staff counts across platform
     const staffCount = await User.countDocuments({
-      role: { $in: ['STORE_OWNER', 'INVENTORY_MANAGER', 'CASHIER', 'ADMIN'] },
+      role: { $in: ['STORE_OWNER', 'STORE_ADMIN', 'CASHIER', 'ADMIN', 'cashier', 'store_admin'] },
     });
     const platformAdminCount = await User.countDocuments({
       $or: [{ role: 'PLATFORM_ADMIN' }, { isPlatformAdmin: true }],

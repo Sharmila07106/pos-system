@@ -16,6 +16,7 @@ const {
   protect,
   requireRole,
   requireActiveStore,
+  forbidPlatformAdmin,
 } = require('../middleware/authMiddleware');
 
 // Multer config for image upload
@@ -46,15 +47,28 @@ const upload = multer({
   },
 });
 
-// All product routes require valid authentication and an active, approved store
+// All product routes require valid authentication, active store, and forbid platform admin
 router.use(protect);
 router.use(requireActiveStore);
+router.use(forbidPlatformAdmin);
 
+// Cashiers and Store Admins can view, add, and edit products and stock
 const canManageProducts = requireRole(
   'store_admin',
   'STORE_ADMIN',
   'STORE_OWNER',
-  'inventory_manager',
+  'admin',
+  'ADMIN',
+  'cashier',
+  'CASHIER'
+);
+
+// Delete product is strictly restricted to Store Admins only
+const canDeleteProducts = requireRole(
+  'store_admin',
+  'STORE_ADMIN',
+  'STORE_OWNER',
+  'admin',
   'ADMIN'
 );
 
@@ -70,6 +84,6 @@ router.get('/barcode/:barcode', getProductByBarcode);
 router.route('/:id')
   .get(getProductById)
   .put(canManageProducts, upload.single('image'), updateProduct)
-  .delete(canManageProducts, deleteProduct);
+  .delete(canDeleteProducts, deleteProduct);
 
 module.exports = router;

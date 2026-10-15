@@ -27,15 +27,13 @@ flowchart TD
     subgraph StoreTenants["Isolated Supermarket Tenants"]
         subgraph StoreA["Store A: FreshMart (storeId: 'freshmart_01')"]
             OwnerA["Store Owner (Admin)"]
-            InvA["Inventory Manager"]
-            CashierA["Cashiers"]
+            CashierA["Cashiers (Checkout & Inventory)"]
             DataA[("Products, Batches, Sales, Movements")]
         end
 
         subgraph StoreB["Store B: GreenMart (storeId: 'greenmart_02')"]
             OwnerB["Store Owner (Admin)"]
-            InvB["Inventory Manager"]
-            CashierB["Cashiers"]
+            CashierB["Cashiers (Checkout & Inventory)"]
             DataB[("Products, Batches, Sales, Movements")]
         end
     end
@@ -68,11 +66,9 @@ flowchart TD
 graph TD
     PA["StoreFlow Platform Admin<br/>(Cross-Store Governance)"]
     SO["Supermarket Owner / Store Administrator<br/>(Full Store Authority for storeId)"]
-    IM["Inventory Manager / Staff<br/>(Stock In, Batches, Adjustments)"]
-    CS["Cashier<br/>(POS Checkout, Receipt, Sales)"]
+    CS["Cashier<br/>(POS Checkout, Receipt, Sales & Inventory)"]
 
     PA -.->|"Approves / Suspends"| SO
-    SO -->|"Invites & Manages"| IM
     SO -->|"Invites & Manages"| CS
 ```
 
@@ -90,32 +86,24 @@ graph TD
 - **Scope**: Single supermarket (`storeId`).
 - **Responsibilities**:
   - Store profile, logo, currency, and tax configuration.
-  - Invite staff via email/activation tokens and assign roles (`INVENTORY_MANAGER`, `CASHIER`).
-  - Create and manage products, selling prices, and category catalogs.
+  - Invite staff via email/activation tokens (role: `CASHIER`).
+  - Create, edit, and delete products, selling prices, and category catalogs.
   - Receive inventory batches with batch numbers and expiry dates.
   - Approve stock adjustments, discounts, and refunds.
-  - View all sales history, cashier performance, waste records, and audit trails.
+  - View all sales history, financial dashboards, cashier performance, waste records, and audit trails.
 - **Security Rule**: Enforced by server-side query scopes (`{ storeId: req.user.storeId }`). Cannot access another supermarket's records.
 
-### C. Inventory Manager / Inventory Staff
-- **Scope**: Inventory operations for their assigned supermarket.
-- **Responsibilities**:
-  - Create product records (defining what an item is).
-  - Receive physical stock shipments and create **Batches** (recording quantity, batch number, cost price, and expiry date).
-  - Review near-expiry (e.g. within 7/15/30 days) and low-stock alerts.
-  - Record damaged or expired stock in **Waste Records**.
-  - Request stock adjustments with mandatory reasons.
-- **Security Rule**: Product creation does not automatically fabricate inventory without a verified stock receiving action. Cannot create staff or edit store settings.
-
-### D. Cashier
-- **Scope**: High-speed, distraction-free checkout screen.
+### C. Cashier
+- **Scope**: Counter operations, high-speed checkout, and store inventory management.
 - **Responsibilities**:
   - Search products by name or instant barcode scanner (F2 shortcut).
   - View live available stock; out-of-stock items are clearly disabled and cannot be sold.
   - Adjust cart quantities within available stock.
   - Select payment tender (Cash with quick chips and live change calculation, Card, UPI).
   - Complete sale with auto-deduction and print itemized receipts.
-- **Security Rule**: Cannot modify product prices, cannot manually adjust stock, cannot approve refunds without authorization, cannot create employee accounts.
+  - Receive physical stock shipments, add new products, and update product details.
+  - Record damaged or expired stock in waste records and view stock movement history.
+- **Security Rule**: Cashiers cannot delete products, configure store settings, access store revenue dashboards, or invite other staff members.
 
 ---
 

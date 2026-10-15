@@ -97,46 +97,16 @@ function App() {
               <Route path="users" element={<Users />} />
             </Route>
 
-            {/* Cashier Only */}
-            <Route element={<RoleRoute allowedRoles={['cashier']} />}>
-              <Route path="pos" element={<POS />} />
-            </Route>
-
-            {/* Store Admin & Inventory Manager */}
-            <Route
-              element={
-                <RoleRoute
-                  allowedRoles={['store_admin', 'store_owner', 'admin', 'inventory_manager']}
-                />
-              }
-            >
-              <Route path="products" element={<Products />} />
-              <Route path="inventory" element={<Inventory />} />
-            </Route>
-
-            {/* Store Admin & Cashier */}
+            {/* Cashier & Store Admin: Checkout, Products, Inventory, Sales History */}
             <Route
               element={
                 <RoleRoute allowedRoles={['store_admin', 'store_owner', 'admin', 'cashier']} />
               }
             >
+              <Route path="pos" element={<POS />} />
+              <Route path="products" element={<Products />} />
+              <Route path="inventory" element={<Inventory />} />
               <Route path="sales" element={<SalesHistory />} />
-            </Route>
-
-            {/* All Staff */}
-            <Route
-              element={
-                <RoleRoute
-                  allowedRoles={[
-                    'store_admin',
-                    'store_owner',
-                    'admin',
-                    'inventory_manager',
-                    'cashier',
-                  ]}
-                />
-              }
-            >
               <Route path="profile" element={<Profile />} />
             </Route>
           </Route>
