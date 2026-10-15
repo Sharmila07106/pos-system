@@ -293,7 +293,7 @@ const Register = () => {
               type="text"
               required
               icon={User}
-              placeholder="e.g. Sharmila U"
+              placeholder="e.g. Alex Morgan"
               value={ownerName}
               onChange={(e) => setOwnerName(e.target.value)}
               onBlur={() => setTouched((prev) => ({ ...prev, ownerName: true }))}
@@ -426,7 +426,7 @@ const Register = () => {
                 to="/login"
                 className="font-bold text-[#0FA38F] hover:text-[#0B8A78] transition-colors ml-1"
               >
-                Sign in to your account
+                Login to your account
               </Link>
             </p>
           </div>

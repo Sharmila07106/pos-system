@@ -13,9 +13,12 @@ const protect = async (req, res, next) => {
   ) {
     try {
       token = req.headers.authorization.split(' ')[1];
+      if (!process.env.JWT_SECRET) {
+        throw new Error('JWT_SECRET environment variable is missing');
+      }
       const decoded = jwt.verify(
         token,
-        process.env.JWT_SECRET || 'storeflow-pos-secret-key-2026'
+        process.env.JWT_SECRET
       );
 
       if (!decoded?.id) {

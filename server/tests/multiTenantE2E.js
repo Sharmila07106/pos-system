@@ -1,3 +1,8 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'test-environment-jwt-secret-minimum-32-chars-long';
+}
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { registerStore, loginUser, activateStaff, changePassword } = require('../controllers/authController');

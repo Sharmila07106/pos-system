@@ -9,13 +9,14 @@ async function ensurePlatformAdmin() {
   const email = (
     process.env.PLATFORM_ADMIN_EMAIL ||
     process.env.SEED_ADMIN_EMAIL ||
-    'sharmila0774@gmail.com'
+    'admin@storeflow.com'
   ).trim().toLowerCase();
 
   const password =
     process.env.PLATFORM_ADMIN_PASSWORD ||
     process.env.SEED_ADMIN_PASSWORD ||
-    'sharmi1234';
+    process.env.SEED_PLATFORM_ADMIN_PASSWORD ||
+    'PlatformAdminPass1!';
 
   const name =
     process.env.PLATFORM_ADMIN_NAME ||
@@ -25,13 +26,6 @@ async function ensurePlatformAdmin() {
   const role = 'PLATFORM_SUPER_ADMIN';
 
   let user = await User.findOne({ email });
-  if (!user) {
-    // Check if user previously had the typo email
-    user = await User.findOne({ email: 'sharmia0774@gmail.com' });
-    if (user) {
-      user.email = email;
-    }
-  }
 
   if (user) {
     user.name = name;

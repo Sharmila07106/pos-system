@@ -1,3 +1,8 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+if (!process.env.JWT_SECRET) {
+  process.env.JWT_SECRET = 'test-environment-jwt-secret-minimum-32-chars-long';
+}
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const Store = require('./models/Store');
@@ -365,22 +370,22 @@ async function runAuthTests() {
     mockUsers.push({
       _id: 'super_admin_mock_id',
       name: 'Platform Super Admin',
-      email: 'sharmila0774@gmail.com',
+      email: 'admin.test@storeflow.com',
       password: 'hashed_password',
       role: 'PLATFORM_SUPER_ADMIN',
       status: 'Active',
       isActive: true,
       store: null,
       createdAt: new Date(),
-      matchPassword: async (pwd) => pwd === 'sharmi1234',
+      matchPassword: async (pwd) => pwd === 'TestPass123!',
       save: async function () {
         return this;
       },
     });
 
     const { req, res } = mockReqRes({
-      email: 'sharmila0774@gmail.com',
-      password: 'sharmi1234',
+      email: 'admin.test@storeflow.com',
+      password: 'TestPass123!',
     });
     await loginUser(req, res);
     assert(

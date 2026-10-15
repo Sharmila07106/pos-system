@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const asyncHandler = require('express-async-handler');
 const StoreApplication = require('../models/StoreApplication');
@@ -113,16 +114,38 @@ const reviewApplication = asyncHandler(async (req, res) => {
 
     if (mongoose.connection.readyState === 1) {
       let owner = await User.findOne({ email: app.email });
+      let activationToken = null;
+      let activationLink = null;
       if (!owner) {
-        owner = await User.create({
-          name: app.ownerName,
-          email: app.email,
-          password: 'StoreFlow@2026',
-          role: 'STORE_OWNER',
-          phone: app.phone,
-          status: 'Active',
-          isActive: true,
-        });
+        const chosenPassword = app.password || app.registrationPassword || app.ownerPassword;
+        if (chosenPassword) {
+          owner = await User.create({
+            name: app.ownerName,
+            email: app.email,
+            password: chosenPassword,
+            role: 'STORE_OWNER',
+            phone: app.phone,
+            status: 'Active',
+            isActive: true,
+          });
+        } else {
+          // If no password exists, generate a random one-time activation link instead of a fixed password
+          activationToken = crypto.randomBytes(32).toString('hex');
+          const tempRandomPassword = crypto.randomBytes(24).toString('hex') + 'A1!';
+          owner = await User.create({
+            name: app.ownerName,
+            email: app.email,
+            password: tempRandomPassword,
+            role: 'STORE_OWNER',
+            phone: app.phone,
+            status: 'Pending_Activation',
+            isActive: false,
+            resetPasswordToken: crypto.createHash('sha256').update(activationToken).digest('hex'),
+            resetPasswordExpire: Date.now() + 48 * 3600 * 1000,
+          });
+          const clientBase = process.env.CLIENT_URL || 'http://localhost:5190';
+          activationLink = `${clientBase}/activate?token=${activationToken}`;
+        }
       } else {
         owner.role = 'STORE_OWNER';
         owner.status = 'Active';

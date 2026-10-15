@@ -40,7 +40,7 @@ export default function PlatformAdmin() {
   useEffect(() => {
     if (!authLoading) {
       if (!token || !user) {
-        toast.error('Please sign in to access Platform Admin');
+        toast.error('Please login to access Platform Admin');
         navigate('/login', { replace: true });
         return;
       }

