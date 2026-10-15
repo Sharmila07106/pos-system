@@ -2,13 +2,18 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
+const dns = require('dns');
+
+// Configure reliable DNS servers at top of server entry file
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (_) {}
+
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('dotenv').config();
 
-// Disable mongoose query buffering so offline requests fail immediately (0ms)
-// instead of hanging for 10000ms with buffering timeout errors
-mongoose.set('bufferCommands', false);
+const { connectDB, getDbStatus } = require('./config/db');
 
 const app = express();
 
@@ -38,23 +43,26 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check endpoint (always accessible regardless of DB state)
+// Returns { status, database: "connected" | "disconnected", reason }
 app.get('/api/health', (req, res) => {
+  const dbInfo = getDbStatus();
   res.json({
     status: 'ok',
-    message: 'POS server is running',
-    database: mongoose.connection.readyState === 1 ? 'CONNECTED' : 'DISCONNECTED',
+    database: dbInfo.database, // "connected" | "disconnected"
+    reason: dbInfo.reason,
   });
 });
 
 // Database connection guard for all operational API routes
-// Prevents buffering timeouts by returning an immediate, clear 503 error if DB is offline
+// Returns immediate 503 while database connects in the background
 app.use('/api', (req, res, next) => {
   if (req.path === '/health') return next();
-  if (mongoose.connection.readyState !== 1) {
+  const dbInfo = getDbStatus();
+  if (dbInfo.database !== 'connected') {
     return res.status(503).json({
       success: false,
       code: 'DB_NOT_CONNECTED',
-      message: 'Database connection is not available. Please configure MONGODB_URI in server/.env and verify your MongoDB cluster access.',
+      message: 'Server is connecting to the database. Please wait a few seconds.',
     });
   }
   next();
@@ -87,34 +95,14 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5090;
 
-async function startServer() {
-  if (process.env.MONGODB_URI) {
-    try {
-      console.log('Connecting to MongoDB...');
-      await mongoose.connect(process.env.MONGODB_URI, {
-        serverSelectionTimeoutMS: 5000,
-      });
-      console.log('✅ MongoDB Connected successfully');
-
-      // Automatically verify or initialize Platform Super Admin on startup
-      try {
-        const { ensurePlatformAdmin } = require('./utils/seedPlatformAdmin');
-        await ensurePlatformAdmin();
-      } catch (seedErr) {
-        console.warn('⚠️ Platform Admin bootstrap notice:', seedErr.message);
-      }
-    } catch (err) {
-      console.error('❌ MongoDB connection error:', err.message);
-    }
-  } else {
-    console.warn('\n⚠️ [StoreFlow Notice]: MONGODB_URI is not set in server/.env.');
-    console.warn('To connect to MongoDB, open server/.env and paste your connection string:');
-    console.warn('Example: MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/storeflow?retryWrites=true&w=majority\n');
-  }
-
+function startServer() {
+  // Start Express listener immediately without waiting for database
   app.listen(PORT, () => {
     console.log(`🚀 StoreFlow POS server running on http://localhost:${PORT}`);
   });
+
+  // Connect to MongoDB in background with resilient retry loop
+  connectDB();
 }
 
 startServer();
