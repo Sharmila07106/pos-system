@@ -32,20 +32,42 @@ async function seedAll() {
 
     let totalCreated = 0;
 
-    // Credentials from environment with fallbacks
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    // Credentials from environment with fallbacks (no hardcoded defaults in production)
     const platformAdminPassword =
       process.env.SEED_PLATFORM_ADMIN_PASSWORD ||
       process.env.PLATFORM_ADMIN_PASSWORD ||
       process.env.SEED_ADMIN_PASSWORD ||
-      'sharmi1234';
+      (isProduction ? '' : 'Admin@12345');
 
     const storeAdminPassword =
       process.env.SEED_STORE_ADMIN_PASSWORD ||
-      'Store@12345';
+      (isProduction ? '' : 'Store@12345');
 
     const cashierPassword =
       process.env.SEED_CASHIER_PASSWORD ||
-      'Cashier@12345';
+      (isProduction ? '' : 'Cashier@12345');
+
+    if (isProduction) {
+      const missing = [];
+      if (!platformAdminPassword || platformAdminPassword.length < 8) {
+        missing.push('SEED_PLATFORM_ADMIN_PASSWORD (min 8 chars)');
+      }
+      if (!storeAdminPassword || storeAdminPassword.length < 8) {
+        missing.push('SEED_STORE_ADMIN_PASSWORD (min 8 chars)');
+      }
+      if (!cashierPassword || cashierPassword.length < 8) {
+        missing.push('SEED_CASHIER_PASSWORD (min 8 chars)');
+      }
+
+      if (missing.length > 0) {
+        console.error('\n❌ SEED REFUSED IN PRODUCTION: Required environment variables are missing or shorter than 8 characters:');
+        missing.forEach((m) => console.error('  - ' + m));
+        console.error('Please configure these in your Render environment variables before running the production seed.\n');
+        process.exit(1);
+      }
+    }
 
     // ----------------------------------------------------
     // STEP 1: Platform Super Admin

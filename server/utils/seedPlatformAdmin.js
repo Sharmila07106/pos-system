@@ -12,21 +12,24 @@ async function ensurePlatformAdmin() {
     'sharmila0774@gmail.com'
   ).trim().toLowerCase();
 
-  const password =
+  const explicitPassword =
+    process.env.SEED_PLATFORM_ADMIN_PASSWORD ||
     process.env.PLATFORM_ADMIN_PASSWORD ||
     process.env.SEED_ADMIN_PASSWORD ||
-    'sharmi1234';
+    '';
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const password = explicitPassword || (isProduction ? '' : 'Admin@12345');
 
   const name =
     process.env.PLATFORM_ADMIN_NAME ||
     process.env.SEED_ADMIN_NAME ||
-    'Platform Super Admin';
+    'Platform Administrator';
 
   const role = 'PLATFORM_SUPER_ADMIN';
 
   let user = await User.findOne({ email });
   if (!user) {
-    // Check if user previously had the typo email
     user = await User.findOne({ email: 'sharmia0774@gmail.com' });
     if (user) {
       user.email = email;
@@ -40,15 +43,24 @@ async function ensurePlatformAdmin() {
     user.store = null;
     user.status = 'Active';
     user.isActive = true;
-    user.password = password; // pre('save') hook hashes password with bcrypt
+
+    // Only update password if an explicit password was configured via environment variable
+    if (explicitPassword && explicitPassword.length >= 8) {
+      user.password = explicitPassword;
+    }
     await user.save();
     console.log(`✅ Platform Super Admin account verified: "${email}" (${role})`);
     return user;
   } else {
+    if (isProduction && (!password || password.length < 8)) {
+      console.warn('⚠️ Cannot initialize Platform Super Admin: SEED_PLATFORM_ADMIN_PASSWORD missing or < 8 chars.');
+      return null;
+    }
+
     user = await User.create({
       name,
       email,
-      password, // pre('save') hook hashes password with bcrypt
+      password: password || 'Admin@12345',
       role,
       isPlatformAdmin: true,
       store: null,
@@ -60,37 +72,29 @@ async function ensurePlatformAdmin() {
   }
 }
 
-async function seedPlatformAdmin() {
+async function runStandalone() {
   if (!process.env.MONGODB_URI) {
-    console.error('\n❌ MONGODB_URI is not configured in server/.env.');
-    console.error('Please configure your database connection in server/.env:');
-    console.error('Example: MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net/storeflow?retryWrites=true&w=majority\n');
+    console.error('\n❌ MONGODB_URI is not configured.');
     process.exit(1);
   }
 
   try {
     console.log(`Connecting to MongoDB...`);
     await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+      family: 4,
     });
     console.log('✅ Connected to MongoDB successfully.');
-
     await ensurePlatformAdmin();
-
-    await mongoose.disconnect();
-    console.log('🎉 Platform Super Admin bootstrap complete.\n');
+    console.log('\nSeed process finished successfully.');
     process.exit(0);
   } catch (err) {
-    console.error('❌ Bootstrap failed:', err.message);
+    console.error('\n❌ Seed failed with error:', err.message);
     process.exit(1);
   }
 }
 
 if (require.main === module) {
-  seedPlatformAdmin();
+  runStandalone();
 }
 
-module.exports = {
-  seedPlatformAdmin,
-  ensurePlatformAdmin,
-};
+module.exports = { ensurePlatformAdmin };
