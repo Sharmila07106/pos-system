@@ -12,6 +12,7 @@
     "seed:admin": "npm run seed:admin --prefix server",
     "seed:products": "npm run seed:products --prefix server",
     "test": "npm test --prefix server",
+    "cleanup:demo": "npm run cleanup:demo --prefix server",
     "build": "npm run build --prefix client"
   },
   "dependencies": {

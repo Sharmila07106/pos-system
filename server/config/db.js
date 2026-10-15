@@ -132,6 +132,17 @@ async function attemptConnection() {
     } catch (_) {
       // Non-fatal notice
     }
+
+    // Run demo data cleanup once at startup if CLEANUP_DEMO_DATA=true is set (e.g. on Render)
+    if (process.env.CLEANUP_DEMO_DATA === 'true') {
+      try {
+        console.log('\n🧹 CLEANUP_DEMO_DATA=true detected: Initiating automatic database cleanup...');
+        const { runCleanup } = require('../scripts/cleanupDemoData');
+        await runCleanup({ confirm: true });
+      } catch (cleanErr) {
+        console.error('⚠️ Cleanup failed on startup:', cleanErr.message);
+      }
+    }
   } catch (err) {
     dbState.isConnected = false;
     dbState.isConnecting = false;

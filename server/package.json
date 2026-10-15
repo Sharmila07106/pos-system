@@ -14,6 +14,7 @@
     "seed:all": "node seed/seedAll.js",
     "seed:products": "node utils/seedProducts.js",
     "seed:admin": "node utils/seedPlatformAdmin.js",
+    "cleanup:demo": "node scripts/cleanupDemoData.js",
     "migrate:remove-inventory-manager": "node scripts/removeInventoryManagerRole.js"
   },
   "keywords": [],
