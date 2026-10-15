@@ -68,7 +68,18 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.*
+.env.local
+*.env
+*.env.local
 !.env.example
+!*.env.example
+!*.env.production.example
+
+# Uploads and database storage
+uploads/
+server/uploads/
+.mongo-data/
+*.mongo-data/
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

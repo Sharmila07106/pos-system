@@ -52,39 +52,37 @@ The Cashier POS terminal is optimized for high-speed counter checkout and USB ba
 
 ---
 
-## Setup Instructions
+## Run Locally
 
 ### 1. Prerequisites
-- Node.js (v18+)
-- MongoDB (Local instance or MongoDB Atlas cluster)
+- Node.js (v20+)
+- MongoDB running locally on `127.0.0.1:27017` or a MongoDB Atlas URI
 
-### 2. Install Dependencies
+### 2. Install & Start
 ```bash
+# Install all dependencies (root, server, and client)
 npm run install:all
-```
 
-### 3. Environment Variables
-Create a `server/.env` file with the following variables:
-```env
-PORT=5090
-MONGODB_URI=mongodb://localhost:27017/storeflow
-JWT_SECRET=super_secret_jwt_key_storeflow_2026
-JWT_EXPIRES_IN=7d
-CLIENT_URL=http://localhost:5190
-PLATFORM_SUPER_ADMIN_PASSWORD=change_this_to_a_secure_password
-```
+# Seed initial database (Super Admin, Ram Store, Cashier, Products, Bills)
+npm run seed:all --prefix server
 
-Create a `client/.env` file (optional, defaults to port 5190):
-```env
-VITE_API_URL=http://localhost:5090/api
-```
-
-### 4. Running the Development Servers
-```bash
+# Run backend (port 5090) and frontend (port 5190/5191) concurrently
 npm run dev
 ```
-- **Client**: `http://localhost:5190`
+- **Frontend App**: `http://localhost:5190`
 - **Backend API**: `http://localhost:5090`
+- **Health Check**: `http://localhost:5090/api/health`
+
+---
+
+## Free Cloud Deployment
+
+StoreFlow is pre-configured for **100% free cloud deployment**:
+- **Database**: MongoDB Atlas (Free M0 Cluster)
+- **Backend API**: Render (Free Web Service via `render.yaml`)
+- **Frontend SPA**: Vercel (Free Hobby Plan via `client/vercel.json`)
+
+👉 **See the complete step-by-step click guide in [DEPLOY.md](DEPLOY.md)**.
 
 ---
 

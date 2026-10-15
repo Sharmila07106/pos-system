@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: storeflow-api
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: server
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "20"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: MONGODB_URI
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ALLOW_VERCEL_PREVIEWS
+        value: "true"
+      - key: SEED_PLATFORM_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_STORE_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_CASHIER_PASSWORD
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
