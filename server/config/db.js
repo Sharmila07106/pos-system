@@ -53,17 +53,44 @@ function getCleanUri() {
   return raw;
 }
 
-// Core connection logic with automatic retries
+// Validate MONGODB_URI according to deployment environment
+function validateProductionUri(uri) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (!isProduction) return;
+
+  if (!uri) {
+    console.error('\n❌ FATAL: MONGODB_URI is required in production environment.');
+    console.error('Please configure your MongoDB Atlas connection string in Render environment variables.\n');
+    process.exit(1);
+  }
+
+  if (!uri.startsWith('mongodb+srv://') && !uri.startsWith('mongodb://')) {
+    console.error('\n❌ FATAL: MONGODB_URI must start with "mongodb+srv://" or "mongodb://".');
+    console.error(`Received: ${maskMongoUri(uri)}\n`);
+    process.exit(1);
+  }
+
+  const isLocalHost = uri.includes('localhost') || uri.includes('127.0.0.1');
+  if (isLocalHost && process.env.ALLOW_LOCAL_DB !== 'true') {
+    console.error('\n❌ FATAL: Local MongoDB URI is not allowed in production on cloud platforms (e.g. Render).');
+    console.error('Please set an Atlas connection string or set ALLOW_LOCAL_DB=true for local production-mode testing.\n');
+    process.exit(1);
+  }
+}
+
+// Core connection logic with automatic retries every 3 seconds
 async function attemptConnection() {
   if (dbState.isConnected) return;
   if (dbState.isConnecting) return;
 
   const uri = getCleanUri();
+  validateProductionUri(uri);
+
   if (!uri) {
     const msg = 'MONGODB_URI is missing or empty in server/.env';
     dbState.lastError = msg;
     dbState.isConnected = false;
-    console.error(`\n❌ MongoDB failed: ${msg}. Retrying in 5 seconds...`);
+    console.error(`\n❌ MongoDB failed: ${msg}. Retrying in 3 seconds...`);
     scheduleRetry();
     return;
   }
@@ -82,7 +109,7 @@ async function attemptConnection() {
     await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
-      family: 4, // Forces IPv4 on Windows to prevent dual-stack resolution hangs
+      family: 4, // Forces IPv4 to prevent dual-stack resolution hangs
     });
 
     dbState.isConnected = true;
@@ -90,11 +117,19 @@ async function attemptConnection() {
     dbState.isConnecting = false;
     console.log(`\n✅ MongoDB connected: ${cluster}`);
 
-    // Ensure Platform Super Admin exists once connection is live
+    // Ensure Platform Super Admin / seed data exists once connection is live
     try {
       const { ensurePlatformAdmin } = require('../utils/seedPlatformAdmin');
       await ensurePlatformAdmin();
-    } catch (seedErr) {
+    } catch (_) {
+      // Non-fatal notice
+    }
+
+    // Migrate any legacy disk uploads to MongoDB once connected
+    try {
+      const { migrateDiskUploads } = require('../utils/migrateDiskUploads');
+      await migrateDiskUploads();
+    } catch (_) {
       // Non-fatal notice
     }
   } catch (err) {
@@ -113,7 +148,7 @@ async function attemptConnection() {
       simplifiedReason = 'Connection refused by target host';
     }
 
-    console.error(`❌ MongoDB failed: [${simplifiedReason}]. Retrying in 5 seconds...`);
+    console.error(`❌ MongoDB failed: [${simplifiedReason}]. Retrying in 3 seconds...`);
     scheduleRetry();
   }
 }
@@ -124,7 +159,7 @@ function scheduleRetry() {
   }
   dbState.timerId = setTimeout(() => {
     attemptConnection();
-  }, 5000);
+  }, 3000); // 3-second retry loop
 }
 
 // Mongoose event listeners for drop & auto-reconnect
@@ -142,14 +177,13 @@ function setupConnectionListeners() {
 
   mongoose.connection.on('disconnected', () => {
     dbState.isConnected = false;
-    console.warn('⚠️ MongoDB connection dropped. Reconnecting automatically in 5 seconds...');
+    console.warn('⚠️ MongoDB connection dropped. Reconnecting automatically in 3 seconds...');
     scheduleRetry();
   });
 }
 
 function connectDB() {
   setupConnectionListeners();
-  // Initiate connection in background without blocking server startup
   attemptConnection();
 }
 
