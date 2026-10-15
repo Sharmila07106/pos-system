@@ -11,7 +11,6 @@ const { memoryApplications } = require('./onboardingController');
 
 // Clean empty fallback arrays (No hardcoded demo stores)
 const memoryStores = [];
-const memoryAuditLogs = [];
 
 // Helper to create store code
 const generateStoreCode = () => {
@@ -311,6 +310,46 @@ const updateStoreStatus = asyncHandler(async (req, res) => {
   });
 });
 
+// Helper to derive current calendar month boundaries in Asia/Kolkata timezone
+function getKolkataMonthBounds() {
+  const now = new Date();
+  const kolkataFmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+  const parts = kolkataFmt.formatToParts(now);
+  const year = parseInt(parts.find((p) => p.type === 'year').value, 10);
+  const month = parseInt(parts.find((p) => p.type === 'month').value, 10);
+  const currentDay = parseInt(parts.find((p) => p.type === 'day').value, 10);
+
+  const startIso = `${year}-${String(month).padStart(2, '0')}-01T00:00:00.000+05:30`;
+  const startOfMonth = new Date(startIso);
+
+  let nextYear = year;
+  let nextMonth = month + 1;
+  if (nextMonth > 12) {
+    nextMonth = 1;
+    nextYear += 1;
+  }
+  const endIso = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01T00:00:00.000+05:30`;
+  const endOfMonth = new Date(endIso);
+
+  const monthName = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    month: 'long',
+    year: 'numeric',
+  }).format(now);
+
+  const shortMonthName = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    month: 'short',
+  }).format(now);
+
+  return { startOfMonth, endOfMonth, year, month, currentDay, monthName, shortMonthName };
+}
+
 // @desc    Get platform aggregate stats
 // @route   GET /api/platform/stats
 // @access  Platform Admin Only
@@ -323,8 +362,8 @@ const getPlatformStats = asyncHandler(async (req, res) => {
 
   if (mongoose.connection.readyState === 1) {
     try {
-      totalStores = await Store.countDocuments();
-      activeStores = await Store.countDocuments({ status: { $in: ['APPROVED', 'ACTIVE'] } });
+      totalStores = await Store.countDocuments({ status: { $in: ['APPROVED', 'ACTIVE', 'SUSPENDED'] } });
+      activeStores = await Store.countDocuments({ status: 'ACTIVE' });
       pendingApplications = await StoreApplication.countDocuments({ status: 'PENDING' });
       totalApplications = await StoreApplication.countDocuments();
       openComplaints = await Complaint.countDocuments({ status: { $in: ['OPEN', 'IN_PROGRESS'] } });
@@ -339,88 +378,84 @@ const getPlatformStats = asyncHandler(async (req, res) => {
       pendingApplications,
       totalApplications,
       openComplaints,
-      platformVersion: '2.0.0-multi-tenant',
+      platformVersion: '2.0.0',
       systemHealth: 'OPERATIONAL',
+      uptimeSeconds: Math.floor(process.uptime()),
     },
   });
 });
 
-// @desc    Get audit trail logs
-// @route   GET /api/platform/audit-logs
-// @access  Platform Admin Only
-const getAuditLogs = asyncHandler(async (req, res) => {
-  if (mongoose.connection.readyState === 1) {
-    try {
-      const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(100);
-      return res.json({ success: true, count: logs.length, data: logs });
-    } catch (err) {
-      console.warn('MongoDB getAuditLogs error:', err.message);
-    }
-  }
-  return res.json({ success: true, count: memoryAuditLogs.length, data: memoryAuditLogs });
-});
-
 // ============================================================================
-// ANALYTICS & CHARTS ENDPOINTS (Real MongoDB Aggregations)
+// ANALYTICS & CHARTS ENDPOINTS (Real Current-Month Asia/Kolkata Aggregations)
 // ============================================================================
 
-// @desc    Applications submitted per month (last 6 months)
+// @desc    Applications submitted per day in current month (Asia/Kolkata)
 // @route   GET /api/platform/analytics/applications-trend
 // @access  Platform Admin Only
 const getApplicationsTrend = asyncHandler(async (req, res) => {
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1);
-  sixMonthsAgo.setHours(0, 0, 0, 0);
+  const { startOfMonth, endOfMonth, currentDay, shortMonthName, monthName, year, month } = getKolkataMonthBounds();
 
   if (mongoose.connection.readyState === 1) {
     try {
       const results = await StoreApplication.aggregate([
-        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        {
+          $match: {
+            createdAt: { $gte: startOfMonth, $lt: endOfMonth },
+          },
+        },
         {
           $group: {
             _id: {
-              year: { $year: '$createdAt' },
-              month: { $month: '$createdAt' },
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: '$createdAt',
+                timezone: 'Asia/Kolkata',
+              },
             },
             count: { $sum: 1 },
           },
         },
-        { $sort: { '_id.year': 1, '_id.month': 1 } },
+        { $sort: { _id: 1 } },
       ]);
 
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const data = [];
+      const resultMap = new Map();
+      results.forEach((r) => resultMap.set(r._id, r.count));
 
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        const y = d.getFullYear();
-        const m = d.getMonth() + 1;
-        const label = `${monthNames[m - 1]} ${y}`;
-        const match = results.find((r) => r._id.year === y && r._id.month === m);
+      const data = [];
+      const daysCount = Math.max(currentDay, 1);
+      for (let d = 1; d <= daysCount; d++) {
+        const dayStr = String(d).padStart(2, '0');
+        const dateKey = `${year}-${String(month).padStart(2, '0')}-${dayStr}`;
         data.push({
-          month: label,
-          applications: match ? match.count : 0,
+          day: `${shortMonthName} ${dayStr}`,
+          date: dateKey,
+          applications: resultMap.get(dateKey) || 0,
         });
       }
 
-      return res.json({ success: true, data });
+      return res.json({ success: true, monthName, data });
     } catch (err) {
       console.warn('MongoDB getApplicationsTrend error:', err.message);
     }
   }
 
-  return res.json({ success: true, data: [] });
+  return res.json({ success: true, monthName: '', data: [] });
 });
 
-// @desc    Applications status breakdown
+// @desc    Applications status breakdown for current month
 // @route   GET /api/platform/analytics/status-breakdown
 // @access  Platform Admin Only
 const getStatusBreakdown = asyncHandler(async (req, res) => {
+  const { startOfMonth, endOfMonth, monthName } = getKolkataMonthBounds();
+
   if (mongoose.connection.readyState === 1) {
     try {
       const results = await StoreApplication.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfMonth, $lt: endOfMonth },
+          },
+        },
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]);
 
@@ -448,6 +483,7 @@ const getStatusBreakdown = asyncHandler(async (req, res) => {
 
       return res.json({
         success: true,
+        monthName,
         data: {
           breakdown: counts,
           chartData,
@@ -461,6 +497,7 @@ const getStatusBreakdown = asyncHandler(async (req, res) => {
 
   return res.json({
     success: true,
+    monthName: '',
     data: {
       breakdown: { PENDING: 0, APPROVED: 0, CHANGES_REQUESTED: 0, REJECTED: 0 },
       chartData: [],
@@ -469,69 +506,79 @@ const getStatusBreakdown = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Cumulative registered stores growth per month (last 6 months)
+// @desc    Cumulative registered stores approved in current month per day
 // @route   GET /api/platform/analytics/stores-growth
 // @access  Platform Admin Only
 const getStoresGrowth = asyncHandler(async (req, res) => {
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1);
-  sixMonthsAgo.setHours(0, 0, 0, 0);
+  const { startOfMonth, endOfMonth, currentDay, shortMonthName, monthName, year, month } = getKolkataMonthBounds();
 
   if (mongoose.connection.readyState === 1) {
     try {
-      const priorStoresCount = await Store.countDocuments({ createdAt: { $lt: sixMonthsAgo } });
-
-      const monthlyAdds = await Store.aggregate([
-        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      const results = await Store.aggregate([
+        {
+          $match: {
+            status: { $in: ['APPROVED', 'ACTIVE', 'SUSPENDED'] },
+            createdAt: { $gte: startOfMonth, $lt: endOfMonth },
+          },
+        },
         {
           $group: {
             _id: {
-              year: { $year: '$createdAt' },
-              month: { $month: '$createdAt' },
+              $dateToString: {
+                format: '%Y-%m-%d',
+                date: '$createdAt',
+                timezone: 'Asia/Kolkata',
+              },
             },
             count: { $sum: 1 },
           },
         },
-        { $sort: { '_id.year': 1, '_id.month': 1 } },
+        { $sort: { _id: 1 } },
       ]);
 
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      const data = [];
-      let runningTotal = priorStoresCount;
+      const resultMap = new Map();
+      results.forEach((r) => resultMap.set(r._id, r.count));
 
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        const y = d.getFullYear();
-        const m = d.getMonth() + 1;
-        const label = `${monthNames[m - 1]} ${y}`;
-        const match = monthlyAdds.find((r) => r._id.year === y && r._id.month === m);
-        const added = match ? match.count : 0;
+      const data = [];
+      let runningTotal = 0;
+      const daysCount = Math.max(currentDay, 1);
+
+      for (let d = 1; d <= daysCount; d++) {
+        const dayStr = String(d).padStart(2, '0');
+        const dateKey = `${year}-${String(month).padStart(2, '0')}-${dayStr}`;
+        const added = resultMap.get(dateKey) || 0;
         runningTotal += added;
         data.push({
-          month: label,
+          day: `${shortMonthName} ${dayStr}`,
+          date: dateKey,
           newStores: added,
           totalStores: runningTotal,
         });
       }
 
-      return res.json({ success: true, data });
+      return res.json({ success: true, monthName, data });
     } catch (err) {
       console.warn('MongoDB getStoresGrowth error:', err.message);
     }
   }
 
-  return res.json({ success: true, data: [] });
+  return res.json({ success: true, monthName: '', data: [] });
 });
 
-// @desc    Complaints by status summary
+// @desc    Complaints by status raised in current month
 // @route   GET /api/platform/analytics/complaints-summary
 // @access  Platform Admin Only
 const getComplaintsSummary = asyncHandler(async (req, res) => {
+  const { startOfMonth, endOfMonth, monthName } = getKolkataMonthBounds();
+
   if (mongoose.connection.readyState === 1) {
     try {
       const results = await Complaint.aggregate([
+        {
+          $match: {
+            createdAt: { $gte: startOfMonth, $lt: endOfMonth },
+          },
+        },
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]);
 
@@ -559,6 +606,7 @@ const getComplaintsSummary = asyncHandler(async (req, res) => {
 
       return res.json({
         success: true,
+        monthName,
         data: {
           breakdown: counts,
           chartData,
@@ -572,6 +620,7 @@ const getComplaintsSummary = asyncHandler(async (req, res) => {
 
   return res.json({
     success: true,
+    monthName: '',
     data: {
       breakdown: { OPEN: 0, IN_PROGRESS: 0, RESOLVED: 0, CLOSED: 0 },
       chartData: [],
@@ -580,7 +629,7 @@ const getComplaintsSummary = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Top 5 cities by number of stores
+// @desc    Top 5 cities of approved/active supermarkets (real data only)
 // @route   GET /api/platform/analytics/stores-by-city
 // @access  Platform Admin Only
 const getStoresByCity = asyncHandler(async (req, res) => {
@@ -588,11 +637,17 @@ const getStoresByCity = asyncHandler(async (req, res) => {
     try {
       const results = await Store.aggregate([
         {
+          $match: {
+            status: { $in: ['APPROVED', 'ACTIVE', 'SUSPENDED'] },
+          },
+        },
+        {
           $group: {
-            _id: { $ifNull: [{ $trim: { input: '$city' } }, 'Unspecified'] },
+            _id: { $trim: { input: '$city' } },
             count: { $sum: 1 },
           },
         },
+        { $match: { _id: { $ne: null, $ne: '' } } },
         { $sort: { count: -1 } },
         { $limit: 5 },
       ]);
@@ -797,7 +852,6 @@ module.exports = {
   getStores,
   updateStoreStatus,
   getPlatformStats,
-  getAuditLogs,
   getApplicationsTrend,
   getStatusBreakdown,
   getStoresGrowth,
@@ -809,5 +863,4 @@ module.exports = {
   getAppearance,
   updateAppearance,
   memoryStores,
-  memoryAuditLogs,
 };
