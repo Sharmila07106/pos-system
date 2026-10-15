@@ -58,7 +58,7 @@ const Home = () => {
               className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-[#12A58B] hover:bg-[#0E8C76] text-white font-bold text-sm shadow-[0_2px_8px_rgba(18,165,139,0.25)] hover:shadow-[0_4px_12px_rgba(18,165,139,0.35)] transition-all whitespace-nowrap cursor-pointer active:scale-[0.98]"
             >
               <LogIn size={17} strokeWidth={2.2} />
-              <span>Login</span>
+              <span>Log In</span>
             </Link>
           </div>
 
@@ -122,7 +122,7 @@ const Home = () => {
                 className="w-full flex items-center justify-center gap-2 h-10 px-5 rounded-xl bg-[#12A58B] hover:bg-[#0E8C76] text-white font-bold text-sm shadow-md transition-all whitespace-nowrap"
               >
                 <LogIn size={17} strokeWidth={2.2} />
-                <span>Login</span>
+                <span>Log In</span>
               </Link>
             </div>
           </div>
@@ -157,7 +157,7 @@ const Home = () => {
                 to="/login"
                 className="inline-flex items-center justify-center gap-2 h-12 px-6 rounded-xl bg-[#12A58B] hover:bg-[#0E8C76] text-white font-bold text-base shadow-[0_4px_16px_rgba(18,165,139,0.4)] hover:shadow-[0_6px_20px_rgba(18,165,139,0.5)] transition-all whitespace-nowrap active:scale-[0.98]"
               >
-                <span>Login to Open Register</span>
+                <span>Log In to Open Register</span>
                 <ArrowRight size={18} />
               </Link>
 
@@ -416,7 +416,7 @@ const Home = () => {
             <Link to="/onboard" className="hover:text-[#12A58B] transition-colors">Register Supermarket</Link>
             <Link to="/application-status" className="hover:text-[#12A58B] transition-colors">Track Status</Link>
             <Link to="/login" className="hover:text-[#12A58B] transition-colors flex items-center gap-1">
-              <ShieldCheck size={14} className="text-[#12A58B]" /> Terminal Login
+              <ShieldCheck size={14} className="text-[#12A58B]" /> Terminal Log In
             </Link>
           </div>
           <div className="font-medium text-xs text-[#55607A]">

@@ -157,7 +157,7 @@ export default function ActivateStaff() {
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <Link to="/login" className="flex-1">
                 <Button variant="primary" size="md" className="w-full">
-                  Go to Login
+                  Go to Log In
                 </Button>
               </Link>
               <Link to="/" className="flex-1">

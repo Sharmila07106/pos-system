@@ -410,7 +410,7 @@ const Register = () => {
             </div>
           </div>
 
-          {/* Google Sign In */}
+          {/* Google OAuth */}
           <GoogleSignInButton
             onSuccess={handleGoogleSuccess}
             onError={(errMsg) => setBackendError(errMsg || 'Google authentication failed')}
@@ -426,7 +426,7 @@ const Register = () => {
                 to="/login"
                 className="font-bold text-[#0FA38F] hover:text-[#0B8A78] transition-colors ml-1"
               >
-                Login to your account
+                Log In to your account
               </Link>
             </p>
           </div>

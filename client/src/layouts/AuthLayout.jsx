@@ -13,7 +13,7 @@ const AuthLayout = () => {
     );
   }
 
-  // Do NOT auto-redirect already signed in users. Always allow viewing the form.
+  // Do NOT auto-redirect already logged in users. Always allow viewing the form.
   return (
     <div className="min-h-screen bg-[#F4F7FB] text-[#0F1B33] font-sans selection:bg-[#12A58B]/20 selection:text-[#12A58B]">
       <Outlet />

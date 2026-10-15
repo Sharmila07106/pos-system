@@ -181,7 +181,7 @@ const Profile = () => {
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-[#FEE2E2]/60 text-[#E5484D] font-bold text-xs border border-[#FCA5A5]/40 hover:bg-[#FEE2E2] transition-colors"
           >
             <LogOut size={16} /> 
-            <span>Sign Out</span>
+            <span>Log Out</span>
           </button>
         </motion.div>
 

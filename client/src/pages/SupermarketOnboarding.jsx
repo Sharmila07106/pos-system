@@ -145,7 +145,7 @@ const SupermarketOnboarding = () => {
           </Link>
           <span className="text-[#CBD5E1] hidden sm:inline">|</span>
           <Link to="/login" className="px-3.5 py-1.5 rounded-xl border border-[#E3E8F0] hover:bg-[#EEF2F8] transition-colors hidden sm:inline-block">
-            Store Login
+            Store Log In
           </Link>
         </div>
       </header>

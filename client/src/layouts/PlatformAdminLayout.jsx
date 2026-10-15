@@ -57,7 +57,7 @@ export default function PlatformAdminLayout() {
   useEffect(() => {
     if (!authLoading) {
       if (!token || !user) {
-        toast.error('Please login to access Platform Admin');
+        toast.error('Please log in to access Platform Admin');
         navigate('/login', { replace: true });
         return;
       }
@@ -127,7 +127,7 @@ export default function PlatformAdminLayout() {
 
   const handleLogout = () => {
     logout();
-    toast.success('Signed out of Platform Admin');
+    toast.success('Logged out of Platform Admin');
     navigate('/login');
   };
 
@@ -441,7 +441,7 @@ export default function PlatformAdminLayout() {
             <button
               onClick={handleLogout}
               className="px-3 py-2 rounded-xl bg-[#E5484D]/20 hover:bg-[#E5484D] border border-[#E5484D]/40 hover:border-[#E5484D] text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              title="Sign out"
+              title="Log out"
             >
               <LogOut size={14} />
               <span className="hidden md:inline">Logout</span>

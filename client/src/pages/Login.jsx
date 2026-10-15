@@ -57,7 +57,7 @@ const Login = () => {
           setIsServerWaking(false);
           setWakeSeconds(0);
 
-          // If user clicked sign-in while server was asleep, auto-submit now
+          // If user clicked log in while server was asleep, auto-submit now
           if (pendingLoginRef.current) {
             const pending = pendingLoginRef.current;
             pendingLoginRef.current = null;
@@ -224,20 +224,20 @@ const Login = () => {
         <div className="w-full max-w-[440px] bg-white rounded-[24px] border border-[#E5EAF1] p-8 md:p-10 shadow-[0_1px_3px_rgba(11,27,58,0.06),0_8px_24px_rgba(11,27,58,0.08)]">
           <div className="mb-6">
             <h2 className="text-2xl font-extrabold text-[#0B1B3A] tracking-tight font-display">
-              Welcome back
+              Log In
             </h2>
             <p className="text-sm text-[#55607A] font-medium mt-1.5">
               Enter your credentials to access your store terminal.
             </p>
           </div>
 
-          {/* Slim Notice if already signed in */}
+          {/* Slim Notice if already logged in */}
           {isAuthenticated && user && (
             <div className="mb-5 p-3.5 rounded-xl border bg-[#E6F6F2] border-[#12A58B]/30 text-[#0E8C76] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold">
               <div className="flex items-center gap-2 truncate">
                 <span className="w-2 h-2 rounded-full bg-[#12A58B] shrink-0" />
                 <span className="truncate">
-                  Signed in as <strong className="font-bold text-[#0B1B3A]">{user.email}</strong>
+                  Logged in as <strong className="font-bold text-[#0B1B3A]">{user.email}</strong>
                 </span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
@@ -253,7 +253,7 @@ const Login = () => {
                   onClick={logout}
                   className="text-[#E5484D] hover:underline font-bold cursor-pointer"
                 >
-                  Sign out
+                  Log out
                 </button>
               </div>
             </div>
@@ -352,7 +352,7 @@ const Login = () => {
                   <span>Waking server ({wakeSeconds}s)...</span>
                 </span>
               ) : (
-                'Login to Terminal'
+                'Log In to Terminal'
               )}
             </Button>
           </form>
@@ -388,7 +388,7 @@ const Login = () => {
               className="w-full"
               onClick={() => setShowForgotModal(false)}
             >
-              Back to Login
+              Back to Log In
             </Button>
           </div>
         </div>

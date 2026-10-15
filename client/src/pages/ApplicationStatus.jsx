@@ -104,7 +104,7 @@ const ApplicationStatus = () => {
           </Link>
           <span className="text-[#CBD5E1]">|</span>
           <Link to="/login" className="px-3.5 py-1.5 rounded-xl border border-[#E3E8F0] hover:bg-[#EEF2F8] transition-colors">
-            Store Login
+            Store Log In
           </Link>
         </div>
       </header>
@@ -231,7 +231,7 @@ const ApplicationStatus = () => {
                   to="/login"
                   className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#0FA38F] hover:bg-[#0B8A78] text-white font-extrabold text-xs shadow-sm transition-all flex items-center justify-center gap-2"
                 >
-                  <span>Login to Store</span>
+                  <span>Log In to Store</span>
                   <ArrowRight size={15} />
                 </Link>
               ) : (

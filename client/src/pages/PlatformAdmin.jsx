@@ -40,7 +40,7 @@ export default function PlatformAdmin() {
   useEffect(() => {
     if (!authLoading) {
       if (!token || !user) {
-        toast.error('Please login to access Platform Admin');
+        toast.error('Please log in to access Platform Admin');
         navigate('/login', { replace: true });
         return;
       }
@@ -59,7 +59,7 @@ export default function PlatformAdmin() {
 
   const handleLogout = () => {
     logout();
-    toast.success('Signed out of Platform Admin');
+    toast.success('Logged out of Platform Admin');
     navigate('/login');
   };
 
@@ -278,7 +278,7 @@ export default function PlatformAdmin() {
               size="sm"
               onClick={handleLogout}
               className="border-white/20 text-white hover:bg-[#E5484D]/20 hover:border-[#E5484D] hover:text-[#E5484D] transition-colors"
-              title="Sign out of Platform Admin"
+              title="Log out of Platform Admin"
             >
               <Power size={14} className="text-[#E5484D]" />
               <span className="hidden sm:inline">Logout</span>
