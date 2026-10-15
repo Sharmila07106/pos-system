@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-eggs" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-eggs" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FED7AA" />
+      <stop offset="100%" stop-color="#FDBA74" />
+    </linearGradient>
+    <linearGradient id="accent-eggs" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C2410C" />
+      <stop offset="100%" stop-color="#C2410C" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-eggs)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="100" ry="18" fill="url(#shadow-eggs)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-eggs">
+    
+        <!-- Carton Base -->
+        <path d="M110 220 L130 280 L270 280 L290 220 Z" fill="#E2E8F0" stroke="#64748B" stroke-width="2.5" />
+        <!-- 6 Brown Eggs -->
+        <ellipse cx="145" cy="205" rx="16" ry="24" fill="#FDBA74" stroke="#EA580C" stroke-width="2" />
+        <ellipse cx="180" cy="195" rx="16" ry="24" fill="#FED7AA" stroke="#EA580C" stroke-width="2" />
+        <ellipse cx="215" cy="195" rx="16" ry="24" fill="#FDBA74" stroke="#EA580C" stroke-width="2" />
+        <ellipse cx="250" cy="205" rx="16" ry="24" fill="#FED7AA" stroke="#EA580C" stroke-width="2" />
+        <!-- Front Label on tray -->
+        <rect x="150" y="240" width="100" height="25" rx="6" fill="#15803D" />
+        <text x="200" y="256" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="9" fill="#FFFFFF">FARM FRESH 6s</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      FARM EGGS
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      NUTRITIOUS GRADE A TRAY
+    </text>
+  </g>
+</svg>

@@ -145,7 +145,11 @@ const createProduct = asyncHandler(async (req, res) => {
   const expiryDate = body.expiryDate ? new Date(body.expiryDate) : null;
   const sku = body.sku ? body.sku.trim() : '';
   const costPrice = body.costPrice !== undefined ? Number(body.costPrice) : 0;
-  const image = req.file ? `/uploads/${req.file.filename}` : (body.image || '');
+  
+  // Support uploaded photo, explicit imageUrl, or body image
+  const resolvedImage = req.file
+    ? `/uploads/products/${req.file.filename}`
+    : (body.imageUrl || body.image || '');
 
   if (!name) {
     res.status(400);
@@ -179,7 +183,8 @@ const createProduct = asyncHandler(async (req, res) => {
     expiryDate,
     sku,
     costPrice,
-    image,
+    image: resolvedImage,
+    imageUrl: resolvedImage,
   });
 
   return res.status(201).json({ success: true, data: product });
@@ -216,11 +221,21 @@ const updateProduct = asyncHandler(async (req, res) => {
 
   const updateData = { ...body };
   if (req.file) {
-    updateData.image = `/uploads/${req.file.filename}`;
+    const uploadedUrl = `/uploads/products/${req.file.filename}`;
+    updateData.image = uploadedUrl;
+    updateData.imageUrl = uploadedUrl;
+  } else if (body.imageUrl !== undefined) {
+    updateData.imageUrl = body.imageUrl;
+    updateData.image = body.imageUrl;
+  } else if (body.image !== undefined) {
+    updateData.imageUrl = body.image;
+    updateData.image = body.image;
   }
+
   if (updateData.price !== undefined) updateData.price = Number(updateData.price);
   if (updateData.stock !== undefined) updateData.stock = Number(updateData.stock);
   if (updateData.lowStockThreshold !== undefined) updateData.lowStockThreshold = Number(updateData.lowStockThreshold);
+  if (updateData.costPrice !== undefined) updateData.costPrice = Number(updateData.costPrice);
 
   const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, {
     new: true,
@@ -269,8 +284,12 @@ const uploadImage = asyncHandler(async (req, res) => {
     throw new Error('No image file provided');
   }
 
-  const imageUrl = `/uploads/${req.file.filename}`;
-  return res.json({ success: true, data: imageUrl });
+  const imageUrl = `/uploads/products/${req.file.filename}`;
+  return res.json({
+    success: true,
+    imageUrl,
+    data: imageUrl,
+  });
 });
 
 module.exports = {

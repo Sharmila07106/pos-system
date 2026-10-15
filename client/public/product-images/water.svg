@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-water" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-water" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#BAE6FD" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="accent-water" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7" />
+      <stop offset="100%" stop-color="#0284C7" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-water)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="65" ry="18" fill="url(#shadow-water)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-water">
+    
+        <!-- Blue Cap -->
+        <rect x="187" y="65" width="26" height="16" rx="3" fill="#0284C7" stroke="#0369A1" stroke-width="2" />
+        <!-- Bottle Neck & Body -->
+        <path d="M190 81 L210 81 L218 120 L220 285 L180 285 L182 120 Z" fill="#E0F2FE" stroke="#38BDF8" stroke-width="2.5" />
+        <!-- Ribbed texture lines -->
+        <line x1="183" y1="140" x2="217" y2="140" stroke="#7DD3FC" stroke-width="2" />
+        <line x1="182" y1="155" x2="218" y2="155" stroke="#7DD3FC" stroke-width="2" />
+        <line x1="181" y1="245" x2="219" y2="245" stroke="#7DD3FC" stroke-width="2" />
+        <line x1="181" y1="260" x2="219" y2="260" stroke="#7DD3FC" stroke-width="2" />
+        <!-- Label with mountain/wave -->
+        <rect x="178" y="175" width="44" height="55" rx="4" fill="#0284C7" />
+        <polygon points="200,185 212,205 188,205" fill="#FFFFFF" />
+        <text x="200" y="220" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="7" fill="#FFFFFF">MINERAL</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      SPRING WATER
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      PURE MINERAL HYDRATION
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-chips" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-chips" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FED7AA" />
+      <stop offset="100%" stop-color="#EA580C" />
+    </linearGradient>
+    <linearGradient id="accent-chips" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C2410C" />
+      <stop offset="100%" stop-color="#C2410C" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-chips)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="85" ry="18" fill="url(#shadow-chips)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-chips">
+    
+        <!-- Chip Bag -->
+        <path d="M135 95 L265 95 L275 295 L125 295 Z" fill="#DC2626" stroke="#991B1B" stroke-width="3" />
+        <!-- Diagonal Burst -->
+        <polygon points="125,200 275,170 275,295 125,295" fill="#FACC15" />
+        <!-- Golden Chip -->
+        <ellipse cx="200" cy="225" rx="28" ry="16" transform="rotate(-15 200 225)" fill="#FDE047" stroke="#CA8A04" stroke-width="2" />
+        <text x="200" y="145" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="900" font-size="14" fill="#FFFFFF" letter-spacing="1">CRUNCH</text>
+        <text x="200" y="160" text-anchor="middle" font-family="'Inter', sans-serif" font-weight="700" font-size="8" fill="#FEE2E2">CLASSIC SALTED</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      POTATO CHIPS
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      CRISPY SALTED SNACK
+    </text>
+  </g>
+</svg>

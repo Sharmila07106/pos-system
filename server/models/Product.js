@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getSuggestedProductImage } = require('../utils/productImage');
 
 const productSchema = new mongoose.Schema(
   {
@@ -63,6 +64,10 @@ const productSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    imageUrl: {
+      type: String,
+      default: '',
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -71,8 +76,26 @@ const productSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+// Auto-populate imageUrl and synchronize with image field
+productSchema.pre('save', function () {
+  if (!this.imageUrl && this.image) {
+    this.imageUrl = this.image;
+  } else if (!this.image && this.imageUrl) {
+    this.image = this.imageUrl;
+  }
+
+  // If still empty, automatically assign suggested vector illustration
+  if (!this.imageUrl && !this.image) {
+    const suggested = getSuggestedProductImage(this.name, this.category);
+    this.image = suggested;
+    this.imageUrl = suggested;
+  }
+});
 
 // Compound index so barcode is unique PER supermarket store
 productSchema.index({ store: 1, barcode: 1 }, { unique: true });

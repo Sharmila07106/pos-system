@@ -38,6 +38,7 @@ import Confetti from 'react-confetti';
 import { useWindowSize } from 'react-use';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { resolveProductImage } from '../utils/productImage';
 
 const POS = () => {
   const { user } = useAuth();
@@ -897,7 +898,8 @@ const POS = () => {
                 {filteredProducts.map((p) => {
                   const isOutOfStock = p.stock <= 0;
                   const isLowStock = !isOutOfStock && p.stock <= (p.lowStockThreshold || 5);
-                  const hasImage = p.image && !imageErrorMap[p._id];
+                  const imageSrc = resolveProductImage(p);
+                  const hasImage = imageSrc && !imageErrorMap[p._id];
 
                   return (
                     <motion.div
@@ -911,11 +913,11 @@ const POS = () => {
                           : 'cursor-pointer border-[#E3E8F0] hover:border-[#0FA38F]/40 hover:shadow-[0_8px_24px_rgba(11,27,58,0.08)] group'
                       }`}
                     >
-                      {/* Product Visual Container */}
-                      <div className="aspect-square bg-[#F4F7FB] rounded-xl mb-3 flex items-center justify-center relative overflow-hidden p-2 border border-[#EEF2F8]">
+                      {/* Product Visual Container (~120px) */}
+                      <div className="h-[120px] bg-[#F4F7FB] rounded-xl mb-3 flex items-center justify-center relative overflow-hidden p-2 border border-[#EEF2F8]">
                         {hasImage ? (
                           <img
-                            src={p.image}
+                            src={imageSrc}
                             alt={p.name}
                             loading="lazy"
                             onError={() => setImageErrorMap(prev => ({ ...prev, [p._id]: true }))}
@@ -966,7 +968,7 @@ const POS = () => {
                             return null;
                           })()}
                         </div>
-                        <h3 className="font-bold text-[#0B1B3A] text-sm truncate leading-snug" title={p.name}>
+                        <h3 className="font-bold text-[#0B1B3A] text-sm line-clamp-2 leading-snug min-h-[2.5rem]" title={p.name}>
                           {p.name}
                         </h3>
                         {p.barcode && (
@@ -1072,9 +1074,21 @@ const POS = () => {
                       exit={{ opacity: 0, scale: 0.95 }}
                       className="pt-2.5 first:pt-0 flex items-center gap-3"
                     >
+                      {/* Product Thumbnail (40px) */}
+                      <div className="w-10 h-10 rounded-lg bg-[#F4F7FB] border border-[#E5EAF1] p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                        <img
+                          src={resolveProductImage(item)}
+                          alt={item.name}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+
                       {/* Name & price */}
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-[#0B1B3A] text-xs sm:text-sm truncate leading-snug">
+                        <h4 className="font-bold text-[#0B1B3A] text-xs sm:text-sm truncate leading-snug" title={item.name}>
                           {item.name}
                         </h4>
                         <div className="flex items-center gap-1.5 flex-wrap">

@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import api from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { resolveProductImage } from '../utils/productImage';
 
 export default function Inventory() {
   const [activeTab, setActiveTab] = useState('batches'); // 'batches' | 'products' | 'waste' | 'history'
@@ -467,8 +468,20 @@ export default function Inventory() {
                           {b.batchNumber}
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="font-bold text-[#0B1B3A]">{prodName}</div>
-                          <div className="text-xs text-[#53607A]">Supplier: {b.supplier || 'Local Vendor'}</div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-[#F4F7FB] border border-[#E5EAF1] p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                              <img
+                                src={resolveProductImage(b.product || { name: prodName })}
+                                alt={prodName}
+                                className="w-full h-full object-contain"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            </div>
+                            <div>
+                              <div className="font-bold text-[#0B1B3A]">{prodName}</div>
+                              <div className="text-xs text-[#53607A]">Supplier: {b.supplier || 'Local Vendor'}</div>
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <span className="font-extrabold text-[#0B1B3A]">{b.remainingQuantity}</span>
@@ -589,7 +602,22 @@ export default function Inventory() {
                     const isLow = p.stock <= (p.lowStockThreshold || 10);
                     return (
                       <tr key={p._id} className="hover:bg-[#F8FAFC] transition-colors">
-                        <td className="py-3.5 px-4 font-bold text-[#0B1B3A]">{p.name}</td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-[#F4F7FB] border border-[#E5EAF1] p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                              <img
+                                src={resolveProductImage(p)}
+                                alt={p.name}
+                                className="w-full h-full object-contain"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            </div>
+                            <div>
+                              <div className="font-bold text-[#0B1B3A]">{p.name}</div>
+                              <div className="text-xs text-[#55607A]">{p.category}</div>
+                            </div>
+                          </div>
+                        </td>
                         <td className="py-3.5 px-4 font-mono text-xs text-[#53607A]">{p.barcode}</td>
                         <td className="py-3.5 px-4 font-extrabold text-[#0B1B3A]">{p.stock}</td>
                         <td className="py-3.5 px-4">
@@ -658,7 +686,19 @@ export default function Inventory() {
                       <td className="py-3.5 px-4 text-xs text-[#53607A]">
                         {new Date(w.createdAt).toLocaleString()}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-[#0B1B3A]">{w.productName}</td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-[#F4F7FB] border border-[#E5EAF1] p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                            <img
+                              src={resolveProductImage({ name: w.productName })}
+                              alt={w.productName}
+                              className="w-full h-full object-contain"
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          </div>
+                          <div className="font-bold text-[#0B1B3A]">{w.productName}</div>
+                        </div>
+                      </td>
                       <td className="py-3.5 px-4 font-mono text-xs text-[#53607A]">
                         {w.batchNumber || 'N/A'}
                       </td>
@@ -717,8 +757,18 @@ export default function Inventory() {
                         <td className="py-3.5 px-4 text-xs text-[#53607A]">
                           {new Date(m.createdAt).toLocaleString()}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-[#0B1B3A]">
-                          {m.product?.name || 'Supermarket Item'}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-[#F4F7FB] border border-[#E5EAF1] p-1 shrink-0 flex items-center justify-center overflow-hidden">
+                              <img
+                                src={resolveProductImage(m.product || { name: m.product?.name || 'Item' })}
+                                alt={m.product?.name || 'Item'}
+                                className="w-full h-full object-contain"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            </div>
+                            <div className="font-bold text-[#0B1B3A]">{m.product?.name || 'Supermarket Item'}</div>
+                          </div>
                         </td>
                         <td className="py-3.5 px-4">
                           <span

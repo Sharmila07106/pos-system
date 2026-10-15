@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-oil" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-oil" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="100%" stop-color="#FDE047" />
+    </linearGradient>
+    <linearGradient id="accent-oil" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#EAB308" />
+      <stop offset="100%" stop-color="#EAB308" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-oil)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="70" ry="18" fill="url(#shadow-oil)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-oil">
+    
+        <!-- Cap -->
+        <rect x="186" y="55" width="28" height="22" rx="4" fill="#EAB308" stroke="#CA8A04" stroke-width="2" />
+        <line x1="186" y1="62" x2="214" y2="62" stroke="#FEF08A" stroke-width="2" />
+        <!-- Bottle Neck -->
+        <path d="M190 77 L210 77 L214 110 L186 110 Z" fill="#FEF9C3" stroke="#FACC15" stroke-width="2" />
+        <!-- Bottle Body -->
+        <rect x="155" y="110" width="90" height="185" rx="22" fill="#FACC15" stroke="#EAB308" stroke-width="3" />
+        <rect x="162" y="116" width="76" height="173" rx="16" fill="#FDE047" opacity="0.9" />
+        <!-- Oil Highlights -->
+        <path d="M168 130 Q170 200 168 270" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" opacity="0.6" />
+        <!-- Label on bottle -->
+        <rect x="165" y="160" width="70" height="85" rx="8" fill="#FFFFFF" stroke="#CA8A04" stroke-width="1.5" />
+        <circle cx="200" cy="190" r="16" fill="#F59E0B" />
+        <polygon points="200,178 204,188 214,188 206,194 209,204 200,198 191,204 194,194 186,188 196,188" fill="#FEF08A" />
+        <text x="200" y="222" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="8" fill="#0B1B3A">100% PURE</text>
+        <text x="200" y="233" text-anchor="middle" font-family="'Inter', sans-serif" font-weight="700" font-size="7" fill="#CA8A04">SUNFLOWER</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      SUNFLOWER OIL
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      REFINED PURE COOKING OIL
+    </text>
+  </g>
+</svg>

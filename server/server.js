@@ -39,8 +39,16 @@ app.use(
 );
 
 app.use(express.json());
-// Serve static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Serve static uploads with Cross-Origin-Resource-Policy header
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  },
+  express.static(path.join(__dirname, 'uploads'))
+);
 
 // Health check endpoint (always accessible regardless of DB state)
 // Returns { status, database: "connected" | "disconnected", reason }

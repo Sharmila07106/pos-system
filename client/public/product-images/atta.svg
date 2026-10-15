@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-atta" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-atta" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2E8F0" />
+      <stop offset="100%" stop-color="#CBD5E1" />
+    </linearGradient>
+    <linearGradient id="accent-atta" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#854D0E" />
+      <stop offset="100%" stop-color="#854D0E" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-atta)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="85" ry="18" fill="url(#shadow-atta)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-atta">
+    
+        <!-- Sack Body -->
+        <path d="M140 100 Q200 90 260 100 L270 295 Q200 305 130 295 Z" fill="#F5EBE1" stroke="#854D0E" stroke-width="3" />
+        <!-- Brown wheat header -->
+        <path d="M140 100 Q200 90 260 100 L265 145 Q200 140 135 145 Z" fill="#854D0E" />
+        <!-- Wheat stalk graphic -->
+        <path d="M200 250 L200 170" stroke="#CA8A04" stroke-width="3" />
+        <ellipse cx="193" cy="180" rx="8" ry="4" transform="rotate(-30 193 180)" fill="#EAB308" />
+        <ellipse cx="207" cy="180" rx="8" ry="4" transform="rotate(30 207 180)" fill="#EAB308" />
+        <ellipse cx="193" cy="195" rx="8" ry="4" transform="rotate(-30 193 195)" fill="#EAB308" />
+        <ellipse cx="207" cy="195" rx="8" ry="4" transform="rotate(30 207 195)" fill="#EAB308" />
+        <ellipse cx="193" cy="210" rx="8" ry="4" transform="rotate(-30 193 210)" fill="#EAB308" />
+        <ellipse cx="207" cy="210" rx="8" ry="4" transform="rotate(30 207 210)" fill="#EAB308" />
+        <text x="200" y="125" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" fill="#FFFFFF">CHAKKI FRESH</text>
+        <text x="200" y="275" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="9" fill="#854D0E">WHOLE WHEAT</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      CHAKKI ATTA
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      100% WHOLE WHEAT FLOUR
+    </text>
+  </g>
+</svg>

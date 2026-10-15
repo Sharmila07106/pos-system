@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-generic" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-generic" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2E8F0" />
+      <stop offset="100%" stop-color="#94A3B8" />
+    </linearGradient>
+    <linearGradient id="accent-generic" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0FA38F" />
+      <stop offset="100%" stop-color="#0FA38F" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-generic)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="90" ry="18" fill="url(#shadow-generic)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-generic">
+    
+        <!-- Brown Kraft Paper Bag -->
+        <path d="M130 140 L270 140 L260 295 L140 295 Z" fill="#D4A373" stroke="#A9714B" stroke-width="3" />
+        <polygon points="130,140 140,165 160,165 150,140" fill="#CCD5AE" />
+        <!-- Green Apple Peeking -->
+        <circle cx="170" cy="130" r="22" fill="#22C55E" stroke="#15803D" stroke-width="2" />
+        <path d="M170 110 Q175 100 180 102" stroke="#78350F" stroke-width="2.5" fill="none" />
+        <!-- Bread Baguette Peeking -->
+        <polygon points="215,70 235,70 250,150 230,150" fill="#EAB308" stroke="#CA8A04" stroke-width="2" />
+        <!-- Carrot Peeking -->
+        <polygon points="190,105 205,105 198,145" fill="#F97316" />
+        <path d="M197 105 L195 90 M197 105 L200 90" stroke="#16A34A" stroke-width="2" />
+        <!-- StoreFlow Logo Icon on Bag -->
+        <circle cx="200" cy="225" r="24" fill="#FFFFFF" stroke="#A9714B" stroke-width="1.5" />
+        <path d="M190 225 L200 215 L210 225 L200 235 Z" fill="#0FA38F" />
+        <text x="200" y="270" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="11" fill="#432818">SUPERMARKET</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      STORE GROCERY
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      FRESH SUPERMARKET GOODS
+    </text>
+  </g>
+</svg>

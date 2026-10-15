@@ -247,6 +247,7 @@ async function seedAll() {
         sku: 'GROC-RICE-01',
         barcode: '8901030010011',
         supplier: 'India Gate Mills',
+        imageUrl: '/product-images/rice.svg',
       },
       {
         name: 'Toor Dal 1kg',
@@ -258,6 +259,7 @@ async function seedAll() {
         sku: 'GROC-DAL-02',
         barcode: '8901030010028',
         supplier: 'Tata Sampann',
+        imageUrl: '/product-images/toor-dal.svg',
       },
       {
         name: 'Sunflower Oil 1L',
@@ -269,6 +271,7 @@ async function seedAll() {
         sku: 'GROC-OIL-03',
         barcode: '8901030010035',
         supplier: 'Fortune Refined',
+        imageUrl: '/product-images/sunflower-oil.svg',
       },
       {
         name: 'Sugar 1kg',
@@ -280,6 +283,7 @@ async function seedAll() {
         sku: 'GROC-SUG-04',
         barcode: '8901030010042',
         supplier: 'Madhur Pure Sugar',
+        imageUrl: '/product-images/sugar.svg',
       },
       {
         name: 'Tata Salt 1kg',
@@ -291,6 +295,7 @@ async function seedAll() {
         sku: 'GROC-SLT-05',
         barcode: '8901030010059',
         supplier: 'Tata Consumer Products',
+        imageUrl: '/product-images/salt.svg',
       },
       {
         name: 'Amul Butter 500g',
@@ -302,6 +307,7 @@ async function seedAll() {
         sku: 'DAIRY-BTR-06',
         barcode: '8901030010066',
         supplier: 'Gujarat Co-operative Milk',
+        imageUrl: '/product-images/butter.svg',
       },
       {
         name: 'Britannia Bread 400g',
@@ -313,6 +319,7 @@ async function seedAll() {
         sku: 'BAKE-BRD-07',
         barcode: '8901030010073',
         supplier: 'Britannia Industries',
+        imageUrl: '/product-images/bread.svg',
       },
       {
         name: 'Maggi 2-Minute Noodles 280g',
@@ -324,6 +331,7 @@ async function seedAll() {
         sku: 'SNAK-MAG-08',
         barcode: '8901030010080',
         supplier: 'Nestle India',
+        imageUrl: '/product-images/noodles.svg',
       },
       {
         name: 'Tata Tea Gold 500g',
@@ -335,6 +343,7 @@ async function seedAll() {
         sku: 'BEV-TEA-09',
         barcode: '8901030010097',
         supplier: 'Tata Global Beverages',
+        imageUrl: '/product-images/tea.svg',
       },
       {
         name: 'Dettol Handwash 200ml',
@@ -346,6 +355,7 @@ async function seedAll() {
         sku: 'PC-DET-10',
         barcode: '8901030010103',
         supplier: 'Reckitt Benckiser',
+        imageUrl: '/product-images/handwash.svg',
       },
     ];
 
@@ -356,6 +366,7 @@ async function seedAll() {
       if (!product) {
         product = await Product.create({
           ...pData,
+          image: pData.imageUrl,
           store: ramStore._id,
           isActive: true,
         });
@@ -378,6 +389,12 @@ async function seedAll() {
 
         console.log(`[CREATED] Product: ${product.name} (Barcode: ${product.barcode}, Stock: ${product.stock})`);
       } else {
+        if (!product.imageUrl || !product.image) {
+          product.imageUrl = pData.imageUrl;
+          product.image = pData.imageUrl;
+          await product.save();
+          console.log(`[UPDATED] Product image: ${product.name} -> ${pData.imageUrl}`);
+        }
         console.log(`[EXISTS] Product already exists: ${product.name}`);
       }
       seededProducts.push(product);

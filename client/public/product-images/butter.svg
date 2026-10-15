@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <defs>
+    <radialGradient id="shadow-butter" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0B1B3A" stop-opacity="0.22" />
+      <stop offset="60%" stop-color="#0B1B3A" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1B3A" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="bg-butter" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="100%" stop-color="#FACC15" />
+    </linearGradient>
+    <linearGradient id="accent-butter" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#CA8A04" />
+      <stop offset="100%" stop-color="#CA8A04" stop-opacity="0.8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Ambient Backdrop -->
+  <rect width="400" height="400" rx="32" fill="#F8FAFC" />
+  <circle cx="200" cy="180" r="140" fill="url(#bg-butter)" opacity="0.35" />
+
+  <!-- Ground Ambient Shadow -->
+  <ellipse cx="200" cy="345" rx="95" ry="18" fill="url(#shadow-butter)" />
+
+  <!-- Product Graphics -->
+  <g id="artwork-butter">
+    
+        <!-- Butter Foil Block -->
+        <polygon points="120,180 180,130 280,130 220,180" fill="#FDE047" stroke="#CA8A04" stroke-width="2.5" />
+        <polygon points="120,180 220,180 220,270 120,270" fill="#FACC15" stroke="#CA8A04" stroke-width="2.5" />
+        <polygon points="220,180 280,130 280,220 220,270" fill="#EAB308" stroke="#CA8A04" stroke-width="2.5" />
+        <!-- Paper Wrapper Ribbon -->
+        <rect x="145" y="180" width="50" height="90" fill="#BE123C" />
+        <text x="170" y="230" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="9" fill="#FFFFFF">BUTTER</text>
+      
+  </g>
+
+  <!-- Label Badge -->
+  <g transform="translate(200, 325)">
+    <rect x="-90" y="-18" width="180" height="36" rx="10" fill="#FFFFFF" stroke="#E5EAF1" stroke-width="1.5" filter="drop-shadow(0 2px 4px rgba(11,27,58,0.06))" />
+    <text x="0" y="0" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-weight="800" font-size="12" fill="#0B1B3A" letter-spacing="0.5">
+      PURE BUTTER
+    </text>
+    <text x="0" y="11" text-anchor="middle" font-family="'Inter', system-ui, sans-serif" font-weight="600" font-size="8" fill="#55607A">
+      PASTEURIZED SALTED BLOCK
+    </text>
+  </g>
+</svg>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const {
   getProducts,
   getProductById,
@@ -19,13 +20,20 @@ const {
   forbidPlatformAdmin,
 } = require('../middleware/authMiddleware');
 
-// Multer config for image upload
+// Ensure destination directory exists: server/uploads/products
+const uploadDir = path.join(__dirname, '..', 'uploads', 'products');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer config for image upload (max 2MB, jpg/jpeg/png/webp)
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename(req, file, cb) {
-    cb(null, `product-${Date.now()}${path.extname(file.originalname)}`);
+    const cleanExt = path.extname(file.originalname).toLowerCase();
+    cb(null, `product-${Date.now()}-${Math.round(Math.random() * 1e9)}${cleanExt}`);
   },
 });
 
@@ -36,12 +44,13 @@ const checkFileType = (file, cb) => {
   if (extname && mimetype) {
     return cb(null, true);
   } else {
-    cb('Images only!');
+    cb(new Error('Images only (JPG, JPEG, PNG, WEBP) under 2MB!'));
   }
 };
 
 const upload = multer({
   storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
   fileFilter: function (req, file, cb) {
     checkFileType(file, cb);
   },
@@ -52,7 +61,7 @@ router.use(protect);
 router.use(requireActiveStore);
 router.use(forbidPlatformAdmin);
 
-// Cashiers and Store Admins can view, add, and edit products and stock
+// Cashiers and Store Admins can view, add, and edit products, stock, and upload product photos
 const canManageProducts = requireRole(
   'store_admin',
   'STORE_ADMIN',
