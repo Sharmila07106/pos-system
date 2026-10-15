@@ -16,6 +16,11 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 require('dotenv').config();
 
+// Ensure critical environment variables exist at startup
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is missing. Server cannot start.');
+}
+
 const { connectDB, getDbStatus } = require('./config/db');
 
 // In production, validate that JWT_SECRET is present and secure (at least 32 characters)

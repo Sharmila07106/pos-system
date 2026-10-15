@@ -231,7 +231,7 @@ const ApplicationStatus = () => {
                   to="/login"
                   className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-[#0FA38F] hover:bg-[#0B8A78] text-white font-extrabold text-xs shadow-sm transition-all flex items-center justify-center gap-2"
                 >
-                  <span>Sign in to Store</span>
+                  <span>Login to Store</span>
                   <ArrowRight size={15} />
                 </Link>
               ) : (

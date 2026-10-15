@@ -301,7 +301,7 @@ const Login = () => {
               type="email"
               required
               icon={Mail}
-              placeholder="e.g. User2@gmail.com or ramstore@gmail.com"
+              placeholder="name@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -352,35 +352,10 @@ const Login = () => {
                   <span>Waking server ({wakeSeconds}s)...</span>
                 </span>
               ) : (
-                'Sign In to Terminal'
+                'Login to Terminal'
               )}
             </Button>
           </form>
-
-          {/* Fast Switch / Demo Credentials Helper */}
-          <div className="mt-5 p-3 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1] text-[11px] text-[#55607A]">
-            <span className="font-bold uppercase tracking-wider block text-[#0B1B3A] mb-1.5">Demo Logins:</span>
-            <div className="flex flex-col gap-1 font-mono text-[11px]">
-              <span 
-                onClick={() => { setEmail('sharmila0774@gmail.com'); setPassword('Admin@12345'); }} 
-                className="cursor-pointer hover:text-[#12A58B] hover:underline"
-              >
-                Super Admin: sharmila0774@gmail.com / Admin@12345
-              </span>
-              <span 
-                onClick={() => { setEmail('ramstore@gmail.com'); setPassword('Store@12345'); }} 
-                className="cursor-pointer hover:text-[#12A58B] hover:underline"
-              >
-                Store Admin: ramstore@gmail.com / Store@12345
-              </span>
-              <span 
-                onClick={() => { setEmail('User2@gmail.com'); setPassword('Cashier@12345'); }} 
-                className="cursor-pointer hover:text-[#12A58B] hover:underline"
-              >
-                Cashier: User2@gmail.com / Cashier@12345
-              </span>
-            </div>
-          </div>
 
           <div className="mt-6 pt-5 border-t border-[#E5EAF1] text-center">
             <p className="text-xs text-[#55607A] font-medium">

@@ -9,7 +9,7 @@ async function ensurePlatformAdmin() {
   const email = (
     process.env.PLATFORM_ADMIN_EMAIL ||
     process.env.SEED_ADMIN_EMAIL ||
-    'sharmila0774@gmail.com'
+    'admin@storeflow.com'
   ).trim().toLowerCase();
 
   const explicitPassword =
@@ -19,22 +19,16 @@ async function ensurePlatformAdmin() {
     '';
 
   const isProduction = process.env.NODE_ENV === 'production';
-  const password = explicitPassword || (isProduction ? '' : 'Admin@12345');
+  const password = explicitPassword || (isProduction ? '' : 'PlatformAdminPass1!');
 
   const name =
     process.env.PLATFORM_ADMIN_NAME ||
     process.env.SEED_ADMIN_NAME ||
-    'Platform Administrator';
+    'Platform Super Admin';
 
   const role = 'PLATFORM_SUPER_ADMIN';
 
   let user = await User.findOne({ email });
-  if (!user) {
-    user = await User.findOne({ email: 'sharmia0774@gmail.com' });
-    if (user) {
-      user.email = email;
-    }
-  }
 
   if (user) {
     user.name = name;

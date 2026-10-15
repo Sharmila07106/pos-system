@@ -57,7 +57,7 @@ export default function PlatformAdminLayout() {
   useEffect(() => {
     if (!authLoading) {
       if (!token || !user) {
-        toast.error('Please sign in to access Platform Admin');
+        toast.error('Please login to access Platform Admin');
         navigate('/login', { replace: true });
         return;
       }
@@ -347,7 +347,7 @@ export default function PlatformAdminLayout() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-bold text-white truncate">
-                  {user?.email || 'sharmila0774@gmail.com'}
+                  {user?.email || 'admin@storeflow.com'}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
@@ -361,7 +361,7 @@ export default function PlatformAdminLayout() {
             <div
               style={{ backgroundColor: accentColor }}
               className="w-8 h-8 mx-auto rounded-lg flex items-center justify-center text-white font-black text-xs shadow-xs"
-              title={`${user?.email || 'sharmila0774@gmail.com'} (PLATFORM_SUPER_ADMIN)`}
+              title={`${user?.email || 'admin@storeflow.com'} (PLATFORM_SUPER_ADMIN)`}
             >
               SA
             </div>

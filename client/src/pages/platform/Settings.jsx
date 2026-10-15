@@ -104,7 +104,7 @@ export default function Settings() {
                 </span>
                 <span className="font-bold text-[#0B1B3A] mt-0.5 flex items-center gap-1.5 text-sm">
                   <Mail size={14} className="text-[#8B96AB]" />
-                  {user?.email || 'sharmila0774@gmail.com'}
+                  {user?.email || 'admin@storeflow.com'}
                 </span>
               </div>
 
