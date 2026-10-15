@@ -1,6 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, RefreshCw, X, KeyRound } from 'lucide-react';
+import { Mail, Lock, AlertCircle, RefreshCw, X, KeyRound, ArrowRight, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { StoreFlowLogo } from '../components/brand/StoreFlowLogo';
 import { Input, PasswordInput } from '../components/ui/Input';
@@ -20,11 +20,12 @@ const Login = () => {
   const [backendError, setBackendError] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [dbConnecting, setDbConnecting] = useState(false);
+  const [retryStatus, setRetryStatus] = useState('');
 
   const navigate = useNavigate();
-  const { login, loginWithGoogle } = useAuth();
+  const { user, isAuthenticated, login, loginWithGoogle, logout } = useAuth();
 
-  // Check database health on mount & poll every 5 seconds until connected
+  // Poll database health every 3 seconds until connected
   useEffect(() => {
     let isMounted = true;
 
@@ -44,11 +45,8 @@ const Login = () => {
       }
     };
 
-    // Immediate check
     checkDbHealth();
-
-    // Recheck every 5 seconds
-    const interval = setInterval(checkDbHealth, 5000);
+    const interval = setInterval(checkDbHealth, 3000);
 
     return () => {
       isMounted = false;
@@ -71,11 +69,7 @@ const Login = () => {
     }
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setBackendError('');
-    setLoading(true);
-
+  const executeLoginWithRetry = async (attempt = 1) => {
     try {
       const data = await login({
         email: email.trim(),
@@ -83,19 +77,43 @@ const Login = () => {
         rememberMe,
       });
 
+      setRetryStatus('');
       toast.success(`Welcome back, ${data.data?.name || 'User'}!`);
       navigateByRole(data.data);
     } catch (err) {
-      if (err.response?.status === 503 || err.response?.data?.code === 'DB_NOT_CONNECTED') {
+      const isDbNotReady =
+        err.response?.status === 503 ||
+        err.response?.data?.code === 'DB_NOT_CONNECTED' ||
+        (err.message && err.message.includes('Network Error'));
+
+      if (isDbNotReady && attempt < 5) {
         setDbConnecting(true);
+        setRetryStatus(`Database connecting... Automatically retrying (${attempt}/5) in 2s`);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return executeLoginWithRetry(attempt + 1);
       } else {
-        const message =
-          err.response?.data?.message || err.message || 'Invalid email or password';
-        setBackendError(message);
+        setRetryStatus('');
+        if (isDbNotReady) {
+          setDbConnecting(true);
+          setBackendError('Server is connecting to the database. Please wait a few seconds.');
+        } else {
+          const message =
+            err.response?.data?.message || err.message || 'Invalid email or password';
+          setBackendError(message);
+        }
       }
     } finally {
-      setLoading(false);
+      if (attempt === 1 || attempt >= 5) {
+        setLoading(false);
+      }
     }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setBackendError('');
+    setLoading(true);
+    await executeLoginWithRetry(1);
   };
 
   const handleGoogleSuccess = async (credential) => {
@@ -124,7 +142,7 @@ const Login = () => {
       {/* Left 55%: Navy to deep teal gradient with 3D scene */}
       <div className="w-full md:w-[55%] min-h-[320px] md:min-h-screen relative flex flex-col justify-between p-8 md:p-14 overflow-hidden bg-gradient-to-br from-[#0B1B3A] via-[#0D2845] to-[#0B3B4A]">
         {/* Subtle radial teal glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#0FA38F]/15 blur-[120px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#12A58B]/15 blur-[120px] pointer-events-none" />
 
         {/* Top brand header */}
         <div className="relative z-10">
@@ -135,7 +153,7 @@ const Login = () => {
         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-90">
           <Suspense
             fallback={
-              <div className="flex items-center justify-center text-[#0FA38F] text-sm font-bold">
+              <div className="flex items-center justify-center text-[#2DD4BF] text-sm font-bold">
                 Loading 3D Workspace...
               </div>
             }
@@ -146,19 +164,19 @@ const Login = () => {
 
         {/* Bottom brand copy */}
         <div className="relative z-10 max-w-lg">
-          <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
+          <h2 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-tight font-display">
             Checkout in seconds. <br />
-            <span className="text-[#0FA38F]">Stock always right.</span>
+            <span className="text-[#2DD4BF]">Stock always right.</span>
           </h2>
-          <p className="mt-4 text-sm md:text-base text-[#8B96AB] font-medium leading-relaxed">
+          <p className="mt-4 text-sm md:text-base text-slate-200 font-medium leading-relaxed">
             Professional retail checkout with instant product scanning, live inventory reconciliation, and intelligent sales ledger.
           </p>
-          <div className="mt-6 flex items-center gap-6 text-xs text-white/60 font-bold uppercase tracking-wider">
+          <div className="mt-6 flex items-center gap-6 text-xs text-slate-200 font-bold uppercase tracking-wider">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#0FA38F]" /> Instant Scanning
+              <span className="w-2 h-2 rounded-full bg-[#12A58B]" /> Instant Scanning
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#FF8A1F]" /> Live Inventory
+              <span className="w-2 h-2 rounded-full bg-[#F59E0B]" /> Live Inventory
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#16A34A]" /> Safe Transactions
@@ -169,33 +187,64 @@ const Login = () => {
 
       {/* Right 45%: White background with centered login card */}
       <div className="w-full md:w-[45%] flex items-center justify-center p-6 md:p-12 bg-[#F4F7FB]">
-        <div className="w-full max-w-[420px] bg-white rounded-[24px] border border-[#E3E8F0] p-8 md:p-10 shadow-[0_1px_2px_rgba(11,27,58,0.06),0_8px_24px_rgba(11,27,58,0.08)]">
-          <div className="mb-8">
-            <h2 className="text-2xl font-extrabold text-[#0B1B3A] tracking-tight">
+        <div className="w-full max-w-[440px] bg-white rounded-[24px] border border-[#E5EAF1] p-8 md:p-10 shadow-[0_1px_3px_rgba(11,27,58,0.06),0_8px_24px_rgba(11,27,58,0.08)]">
+          <div className="mb-6">
+            <h2 className="text-2xl font-extrabold text-[#0B1B3A] tracking-tight font-display">
               Welcome back
             </h2>
-            <p className="text-sm text-[#53607A] font-medium mt-1.5">
+            <p className="text-sm text-[#55607A] font-medium mt-1.5">
               Enter your credentials to access your store terminal.
             </p>
           </div>
 
-          {/* Yellow message banner: database connecting with 5s auto-retry */}
-          {dbConnecting && (
-            <div className="mb-6 p-4 rounded-[14px] border bg-[#FFF8EB] border-[#FDE68A] text-[#92400E] flex items-center gap-3 text-xs font-semibold leading-relaxed animate-fade-in shadow-2xs">
-              <RefreshCw size={18} className="shrink-0 text-[#D97706] animate-spin" />
-              <div>
-                <strong className="font-extrabold block text-sm mb-0.5">
-                  Database Connecting
-                </strong>
-                <span>Server is connecting to the database. Please wait a few seconds.</span>
+          {/* Slim Notice if already signed in */}
+          {isAuthenticated && user && (
+            <div className="mb-5 p-3.5 rounded-xl border bg-[#E6F6F2] border-[#12A58B]/30 text-[#0E8C76] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-semibold">
+              <div className="flex items-center gap-2 truncate">
+                <span className="w-2 h-2 rounded-full bg-[#12A58B] shrink-0" />
+                <span className="truncate">
+                  Signed in as <strong className="font-bold text-[#0B1B3A]">{user.email}</strong>
+                </span>
               </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigateByRole(user)}
+                  className="text-[#12A58B] hover:text-[#0E8C76] font-bold underline cursor-pointer"
+                >
+                  Continue to dashboard →
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="text-[#E5484D] hover:underline font-bold cursor-pointer"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Small orange notice: database connecting */}
+          {dbConnecting && (
+            <div className="mb-5 p-3 rounded-xl border bg-[#FFF8EB] border-[#FDE68A] text-[#92400E] flex items-center gap-2.5 text-xs font-semibold leading-relaxed animate-fade-in shadow-2xs">
+              <RefreshCw size={15} className="shrink-0 text-[#D97706] animate-spin" />
+              <span>Connecting to the database, please wait...</span>
+            </div>
+          )}
+
+          {/* Auto-retry notice */}
+          {retryStatus && (
+            <div className="mb-5 p-3 rounded-xl border bg-[#EFF6FF] border-[#BFDBFE] text-[#1E40AF] flex items-center gap-2.5 text-xs font-semibold animate-pulse">
+              <RefreshCw size={14} className="shrink-0 animate-spin text-[#3B82F6]" />
+              <span>{retryStatus}</span>
             </div>
           )}
 
           {/* General authentication error banner */}
           {backendError && (
-            <div className="mb-6 p-4 rounded-[14px] border bg-[#FEE2E2] border-[#FECACA] text-[#E5484D] flex items-start gap-3 text-xs font-semibold leading-relaxed animate-shake">
-              <AlertCircle size={20} className="shrink-0 text-[#E5484D] mt-0.5" />
+            <div className="mb-5 p-3.5 rounded-xl border bg-[#FEE2E2] border-[#FECACA] text-[#E5484D] flex items-start gap-3 text-xs font-semibold leading-relaxed animate-shake">
+              <AlertCircle size={18} className="shrink-0 text-[#E5484D] mt-0.5" />
               <div>
                 <strong className="font-extrabold block mb-0.5">Authentication Failed</strong>
                 <span>{backendError}</span>
@@ -203,13 +252,13 @@ const Login = () => {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             <Input
               label="Email Address"
               type="email"
               required
               icon={Mail}
-              placeholder="admin@storeflow.com"
+              placeholder="e.g. User2@gmail.com or ramstore@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -223,22 +272,22 @@ const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
 
-            <div className="flex items-center justify-between text-xs pt-1">
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-[#53607A] hover:text-[#0B1B3A] transition-colors">
+            <div className="flex items-center justify-between text-xs pt-0.5">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-[#55607A] hover:text-[#0B1B3A] transition-colors">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded text-[#0FA38F] focus:ring-[#0FA38F] border-[#CBD5E1]"
+                  className="w-4 h-4 rounded text-[#12A58B] focus:ring-[#12A58B] border-[#CBD5E1]"
                 />
                 <span>Remember me</span>
               </label>
               <button
                 type="button"
                 onClick={() => setShowForgotModal(true)}
-                className="font-bold text-[#0FA38F] hover:text-[#0B8A78] transition-colors"
+                className="font-bold text-[#12A58B] hover:text-[#0E8C76] transition-colors cursor-pointer"
               >
-                Forgot password?
+                Forgot Password?
               </button>
             </div>
 
@@ -246,69 +295,78 @@ const Login = () => {
               type="submit"
               variant="primary"
               size="lg"
-              loading={loading}
-              className="w-full mt-2"
+              className="w-full mt-2 font-bold shadow-[0_2px_10px_rgba(18,165,139,0.3)] bg-[#12A58B] hover:bg-[#0E8C76]"
+              disabled={loading}
             >
-              Sign In to StoreFlow
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Verifying credentials...</span>
+                </span>
+              ) : (
+                'Sign In to Terminal'
+              )}
             </Button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#E3E8F0]" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-3 text-[#8B96AB] font-bold tracking-wider">
-                OR
+          {/* Fast Switch / Demo Credentials Helper */}
+          <div className="mt-5 p-3 rounded-xl bg-[#F8FAFC] border border-[#E5EAF1] text-[11px] text-[#55607A]">
+            <span className="font-bold uppercase tracking-wider block text-[#0B1B3A] mb-1.5">Demo Logins:</span>
+            <div className="flex flex-col gap-1 font-mono text-[11px]">
+              <span 
+                onClick={() => { setEmail('sharmila0774@gmail.com'); setPassword('Admin@12345'); }} 
+                className="cursor-pointer hover:text-[#12A58B] hover:underline"
+              >
+                Super Admin: sharmila0774@gmail.com / Admin@12345
+              </span>
+              <span 
+                onClick={() => { setEmail('ramstore@gmail.com'); setPassword('Store@12345'); }} 
+                className="cursor-pointer hover:text-[#12A58B] hover:underline"
+              >
+                Store Admin: ramstore@gmail.com / Store@12345
+              </span>
+              <span 
+                onClick={() => { setEmail('User2@gmail.com'); setPassword('Cashier@12345'); }} 
+                className="cursor-pointer hover:text-[#12A58B] hover:underline"
+              >
+                Cashier: User2@gmail.com / Cashier@12345
               </span>
             </div>
           </div>
 
-          {/* Google Sign In */}
-          <GoogleSignInButton onSuccess={handleGoogleSuccess} />
-
-          {/* Onboarding Register link */}
-          <div className="mt-8 text-center text-xs font-semibold text-[#53607A]">
-            Registering a new supermarket?{' '}
-            <Link
-              to="/onboard"
-              className="font-extrabold text-[#0FA38F] hover:text-[#0B8A78] transition-colors underline underline-offset-4"
-            >
-              Apply for Supermarket Onboarding
-            </Link>
+          <div className="mt-6 pt-5 border-t border-[#E5EAF1] text-center">
+            <p className="text-xs text-[#55607A] font-medium">
+              Want to register a new supermarket?{' '}
+              <Link
+                to="/onboard"
+                className="text-[#12A58B] font-bold hover:underline"
+              >
+                Apply for Onboarding
+              </Link>
+            </p>
           </div>
         </div>
       </div>
 
       {/* Forgot Password Modal */}
       {showForgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full border border-[#E3E8F0] shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#F1F5F9]">
-              <div className="flex items-center gap-2 text-[#0B1B3A]">
-                <KeyRound size={20} className="text-[#0FA38F]" />
-                <h3 className="font-extrabold text-base">Reset Password</h3>
-              </div>
-              <button
-                onClick={() => setShowForgotModal(false)}
-                className="p-1 rounded-lg text-[#8B96AB] hover:text-[#0B1B3A] hover:bg-[#F1F5F9] transition-colors"
-              >
-                <X size={18} />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white rounded-[24px] max-w-sm w-full p-6 text-center space-y-4 border border-[#E5EAF1] shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-[#E6F6F2] text-[#0E8C76] flex items-center justify-center mx-auto font-bold">
+              <KeyRound size={24} />
             </div>
-            <p className="text-xs text-[#53607A] leading-relaxed mb-6">
-              For security across supermarket tenants, staff password resets must be initiated by your Supermarket Store Administrator or Platform Support. Please contact your administrator to reset your credentials.
+            <h3 className="text-lg font-bold text-[#0B1B3A]">Reset Password</h3>
+            <p className="text-xs text-[#55607A] leading-relaxed">
+              For security in multi-tenant mode, password resets must be issued by your Store Administrator or Platform Super Admin.
             </p>
-            <div className="flex justify-end">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShowForgotModal(false)}
-              >
-                Understood
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="md"
+              className="w-full"
+              onClick={() => setShowForgotModal(false)}
+            >
+              Back to Login
+            </Button>
           </div>
         </div>
       )}
