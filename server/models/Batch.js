@@ -61,4 +61,7 @@ const batchSchema = new mongoose.Schema(
   }
 );
 
+// Compound unique index: batchNumber is unique PER supermarket store
+batchSchema.index({ store: 1, batchNumber: 1 }, { unique: true });
+
 module.exports = mongoose.model('Batch', batchSchema);

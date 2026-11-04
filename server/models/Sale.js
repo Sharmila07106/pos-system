@@ -29,7 +29,6 @@ const saleSchema = new mongoose.Schema(
     transactionId: {
       type: String,
       required: true,
-      unique: true,
       index: true,
     },
     receiptNo: {
@@ -38,7 +37,6 @@ const saleSchema = new mongoose.Schema(
     },
     idempotencyKey: {
       type: String,
-      sparse: true,
       index: true,
     },
     items: [saleItemSchema],
@@ -81,6 +79,18 @@ const saleSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+  }
+);
+
+// Compound unique index: transactionId is unique PER supermarket store
+saleSchema.index({ store: 1, transactionId: 1 }, { unique: true });
+
+// Compound unique index: idempotencyKey is unique PER supermarket store when provided
+saleSchema.index(
+  { store: 1, idempotencyKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { idempotencyKey: { $type: 'string', $gt: '' } },
   }
 );
 

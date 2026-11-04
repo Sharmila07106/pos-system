@@ -184,13 +184,56 @@ app.use('/api/dashboard', require('./routes/dashboardRoutes'));
 app.use('/api/inventory', require('./routes/inventoryRoutes'));
 app.use('/api/support', require('./routes/supportRoutes'));
 
-// Centralized error handler (never leaks stack traces in production)
+// Centralized error handler (friendly JSON, never leaks raw DB errors or stack traces in production)
 app.use((err, req, res, next) => {
-  const statusCode = err.status || (res.statusCode === 200 ? 500 : res.statusCode);
-  res.status(statusCode);
-  res.json({
+  console.error('Unhandled error:', err);
+
+  let statusCode = err.status || (res.statusCode === 200 ? 500 : res.statusCode);
+  let friendlyMessage = err.message || 'Internal Server Error';
+
+  // Handle MongoDB Duplicate Key Error (code 11000)
+  if (err.code === 11000 || (err.message && err.message.includes('E11000'))) {
+    statusCode = 409;
+    const keyPattern = err.keyPattern || {};
+    const msg = err.message || '';
+
+    if (keyPattern.barcode || msg.includes('barcode')) {
+      friendlyMessage = 'A product with this barcode already exists in your supermarket.';
+    } else if (keyPattern.sku || msg.includes('sku')) {
+      friendlyMessage = 'A product with this SKU already exists in your supermarket.';
+    } else if (keyPattern.transactionId || msg.includes('transactionId')) {
+      friendlyMessage = 'A sale with this transaction ID already exists. Please retry.';
+    } else if (keyPattern.idempotencyKey || msg.includes('idempotencyKey')) {
+      friendlyMessage = 'This transaction has already been processed.';
+    } else if (keyPattern.email || msg.includes('email')) {
+      friendlyMessage = 'An account with this email address already exists.';
+    } else if (keyPattern.batchNumber || msg.includes('batchNumber')) {
+      friendlyMessage = 'A batch with this batch number already exists in your supermarket.';
+    } else if (keyPattern.storeCode || msg.includes('storeCode')) {
+      friendlyMessage = 'A supermarket with this store code already exists.';
+    } else if (keyPattern.ticketNo || msg.includes('ticketNo')) {
+      friendlyMessage = 'A support ticket with this number already exists.';
+    } else {
+      friendlyMessage = 'A duplicate record error occurred. Please try again.';
+    }
+  } else if (err.name === 'ValidationError') {
+    statusCode = 400;
+    const messages = err.errors ? Object.values(err.errors).map((e) => e.message) : [];
+    friendlyMessage = messages.length > 0 ? messages.join('. ') : 'Validation failed for one or more fields.';
+  } else if (err.name === 'CastError') {
+    statusCode = 400;
+    friendlyMessage = `Invalid identifier format: ${err.value}`;
+  } else {
+    // Sanitize any remaining raw DB error strings in any environment
+    if (friendlyMessage.includes('E11000') || friendlyMessage.includes('collection:')) {
+      friendlyMessage = 'A duplicate record error occurred. Please try again.';
+      statusCode = 409;
+    }
+  }
+
+  res.status(statusCode).json({
     success: false,
-    message: err.message || 'Internal Server Error',
+    message: friendlyMessage,
     stack: process.env.NODE_ENV === 'production' ? undefined : err.stack,
   });
 });

@@ -8,9 +8,19 @@ const AuditLog = require('../models/AuditLog');
 const memoryApplications = [];
 
 // Helper to generate unique application ID
-const generateApplicationId = () => {
-  const randomNum = Math.floor(10000 + Math.random() * 90000);
-  return `APP-${randomNum}`;
+const generateApplicationId = async () => {
+  for (let i = 0; i < 10; i++) {
+    const randomNum = Math.floor(10000 + Math.random() * 90000);
+    const candidate = `APP-${randomNum}`;
+    if (mongoose.connection.readyState === 1) {
+      const exists = await StoreApplication.findOne({ applicationId: candidate });
+      if (!exists) return candidate;
+    } else {
+      const exists = memoryApplications.some((a) => a.applicationId === candidate);
+      if (!exists) return candidate;
+    }
+  }
+  return `APP-${Date.now().toString().slice(-5)}`;
 };
 
 // @desc    Submit supermarket onboarding application
@@ -37,7 +47,7 @@ const submitApplication = asyncHandler(async (req, res) => {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
-  const appId = generateApplicationId();
+  const appId = await generateApplicationId();
 
   if (mongoose.connection.readyState === 1) {
     try {

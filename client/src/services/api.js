@@ -31,6 +31,24 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Toast deduplication tracker to prevent identical stacked error toasts
+const recentToastMessages = new Map();
+
+function showFriendlyErrorToast(message) {
+  if (!message) return;
+  const now = Date.now();
+  const lastTime = recentToastMessages.get(message) || 0;
+  if (now - lastTime < 2500) {
+    return; // Suppress duplicate message within 2.5s window
+  }
+  recentToastMessages.set(message, now);
+  if (recentToastMessages.size > 50) {
+    recentToastMessages.clear();
+  }
+
+  toast.error(message, { id: message });
+}
+
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -53,8 +71,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     } else if (!isAuthRoute && !error.config?.skipToast) {
-      // Don't pop global toast if the page already shows a dedicated error banner
-      toast.error(message);
+      showFriendlyErrorToast(message);
     }
 
     return Promise.reject(error);

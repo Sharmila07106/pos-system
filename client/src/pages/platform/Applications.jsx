@@ -12,12 +12,16 @@ import {
   Building2,
   RefreshCw,
   Inbox,
+  Copy,
+  Check,
+  ExternalLink,
+  ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 
 export default function Applications() {
-  const { refreshCounter, accentColor } = useOutletContext() || {};
+  const { refreshCounter, triggerRefresh, accentColor } = useOutletContext() || {};
 
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +33,9 @@ export default function Applications() {
   const [reviewAction, setReviewAction] = useState('APPROVE');
   const [reviewNotes, setReviewNotes] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [errorInsideDrawer, setErrorInsideDrawer] = useState('');
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const fetchApplications = async () => {
     try {
@@ -53,21 +60,35 @@ export default function Applications() {
 
   const handleOpenReview = (app) => {
     setSelectedApp(app);
-    setReviewAction('APPROVE');
-    setReviewNotes('');
+    setReviewAction(app.status === 'PENDING' ? 'APPROVE' : (app.status === 'CHANGES_REQUESTED' ? 'APPROVE' : app.status));
+    setReviewNotes(app.reviewNotes || '');
+    setErrorInsideDrawer('');
+    setShowConfirmDialog(false);
   };
 
-  const handleConfirmDecision = async (e) => {
+  const handlePreConfirm = (e) => {
     e.preventDefault();
-    if (!selectedApp) return;
+    setErrorInsideDrawer('');
 
-    if (reviewAction !== 'APPROVE' && !reviewNotes.trim()) {
-      toast.error('Please enter review notes explaining why changes or rejection is needed.');
+    if (reviewAction === 'REQUEST_CHANGES' && (!reviewNotes || reviewNotes.trim().length < 5)) {
+      setErrorInsideDrawer('Please enter review notes with at least 5 characters explaining what changes are needed.');
       return;
     }
 
+    if (reviewAction === 'REJECT' && (!reviewNotes || reviewNotes.trim().length < 3)) {
+      setErrorInsideDrawer('Please provide a reason for rejecting this supermarket application.');
+      return;
+    }
+
+    setShowConfirmDialog(true);
+  };
+
+  const handleExecuteDecision = async () => {
+    if (!selectedApp) return;
+
     try {
       setSubmittingReview(true);
+      setErrorInsideDrawer('');
       const targetId = selectedApp._id || selectedApp.applicationId;
       const res = await api.put(`/platform/applications/${targetId}/review`, {
         action: reviewAction,
@@ -76,18 +97,29 @@ export default function Applications() {
 
       if (res.data?.success) {
         toast.success(res.data.message || `Application ${reviewAction.toLowerCase()}d successfully.`);
+        if (triggerRefresh) triggerRefresh();
+        setShowConfirmDialog(false);
         setSelectedApp(null);
         setReviewNotes('');
         fetchApplications();
       } else {
-        toast.error(res.data?.message || 'Review action failed.');
+        setErrorInsideDrawer(res.data?.message || 'Review action failed.');
+        setShowConfirmDialog(false);
       }
     } catch (err) {
-      const msg = err.response?.data?.message || 'Review action failed.';
-      toast.error(msg);
+      const msg = err.response?.data?.message || err.message || 'Review action failed.';
+      setErrorInsideDrawer(msg);
+      setShowConfirmDialog(false);
     } finally {
       setSubmittingReview(false);
     }
+  };
+
+  const handleCopyLink = (link) => {
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    toast.success('Link copied to clipboard!');
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const filteredApps = applications.filter((app) => {
@@ -249,7 +281,7 @@ export default function Applications() {
         )}
       </div>
 
-      {/* Review Modal */}
+      {/* Review Drawer / Modal */}
       {selectedApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 text-[#0B1B3A] space-y-5 animate-in fade-in zoom-in-95 duration-200">
@@ -261,22 +293,34 @@ export default function Applications() {
                 <h3 className="text-base font-extrabold text-[#0B1B3A]">{selectedApp.businessName}</h3>
               </div>
               <button
-                onClick={() => setSelectedApp(null)}
+                onClick={() => {
+                  setSelectedApp(null);
+                  setErrorInsideDrawer('');
+                  setShowConfirmDialog(false);
+                }}
                 className="w-8 h-8 rounded-full bg-[#F4F7FB] hover:bg-[#E3E8F0] flex items-center justify-center text-[#53607A]"
               >
                 <X size={16} />
               </button>
             </div>
 
+            {/* Error Message Inside Drawer if failed */}
+            {errorInsideDrawer && (
+              <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-semibold flex items-start gap-2">
+                <XCircle size={16} className="shrink-0 mt-0.5 text-red-500" />
+                <div className="flex-1">{errorInsideDrawer}</div>
+              </div>
+            )}
+
             {/* Application Overview Summary */}
-            <div className="bg-[#F8FAFC] border border-[#E3E8F0] rounded-2xl p-4 text-xs space-y-2">
+            <div className="bg-[#F8FAFC] border border-[#E3E8F0] rounded-2xl p-4 text-xs space-y-2.5">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold">Owner</span>
+                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold">Owner Name</span>
                   <p className="font-bold text-[#0B1B3A]">{selectedApp.ownerName}</p>
                 </div>
                 <div>
-                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold">Contact Email</span>
+                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold">Business Email</span>
                   <p className="font-bold text-[#0B1B3A]">{selectedApp.email}</p>
                 </div>
                 <div>
@@ -284,24 +328,57 @@ export default function Applications() {
                   <p className="font-bold text-[#0B1B3A]">{selectedApp.phone}</p>
                 </div>
                 <div>
-                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold">City & Location</span>
+                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold">City & Region</span>
                   <p className="font-bold text-[#0B1B3A]">{selectedApp.city}</p>
                 </div>
               </div>
+
               <div className="pt-2 border-t border-[#E3E8F0]">
                 <span className="text-[#8B96AB] text-[10px] uppercase font-bold">Physical Address</span>
                 <p className="font-medium text-[#53607A]">{selectedApp.address}</p>
               </div>
+
+              {/* Owner Account Status */}
+              <div className="pt-2 border-t border-[#E3E8F0] flex items-center justify-between">
+                <div>
+                  <span className="text-[#8B96AB] text-[10px] uppercase font-bold block">Owner Account</span>
+                  <span className="font-bold text-xs">
+                    {selectedApp.status === 'APPROVED' ? (
+                      <span className="text-[#0FA38F] flex items-center gap-1">
+                        <CheckCircle2 size={13} /> Created & Verified
+                      </span>
+                    ) : (
+                      <span className="text-[#D97706] flex items-center gap-1">
+                        <Clock size={13} /> Not created yet (Activates on approval)
+                      </span>
+                    )}
+                  </span>
+                </div>
+                {selectedApp.status === 'APPROVED' && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopyLink(`${window.location.origin}/login`)}
+                    className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-[#E2F6F3] text-[#0FA38F] hover:bg-[#D0F1EB] transition-colors flex items-center gap-1"
+                  >
+                    {copiedLink ? <Check size={12} /> : <Copy size={12} />}
+                    <span>Copy Login Link</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Decision Selector */}
-            <form onSubmit={handleConfirmDecision} className="space-y-4">
+            {/* Decision Selector & Form */}
+            <form onSubmit={handlePreConfirm} className="space-y-4">
               <div>
                 <label className="text-xs font-bold text-[#53607A] block mb-2">Review Decision</label>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setReviewAction('APPROVE')}
+                    disabled={submittingReview}
+                    onClick={() => {
+                      setReviewAction('APPROVE');
+                      setErrorInsideDrawer('');
+                    }}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       reviewAction === 'APPROVE'
                         ? 'bg-[#0FA38F]/15 border-[#0FA38F] text-[#0FA38F]'
@@ -312,7 +389,11 @@ export default function Applications() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setReviewAction('REQUEST_CHANGES')}
+                    disabled={submittingReview}
+                    onClick={() => {
+                      setReviewAction('REQUEST_CHANGES');
+                      setErrorInsideDrawer('');
+                    }}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       reviewAction === 'REQUEST_CHANGES'
                         ? 'bg-[#3B82F6]/15 border-[#3B82F6] text-[#3B82F6]'
@@ -323,7 +404,11 @@ export default function Applications() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setReviewAction('REJECT')}
+                    disabled={submittingReview}
+                    onClick={() => {
+                      setReviewAction('REJECT');
+                      setErrorInsideDrawer('');
+                    }}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                       reviewAction === 'REJECT'
                         ? 'bg-[#EF4444]/15 border-[#EF4444] text-[#EF4444]'
@@ -342,40 +427,92 @@ export default function Applications() {
                 <textarea
                   rows={3}
                   value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
+                  disabled={submittingReview}
+                  onChange={(e) => {
+                    setReviewNotes(e.target.value);
+                    setErrorInsideDrawer('');
+                  }}
                   placeholder={
                     reviewAction === 'APPROVE'
                       ? 'Optional note (e.g. Verified documentation and approved for live POS).'
-                      : 'Provide clear reasons for rejection or requested document changes...'
+                      : reviewAction === 'REQUEST_CHANGES'
+                      ? 'Detail required documentation corrections for applicant...'
+                      : 'Provide clear reasons for rejecting this application...'
                   }
                   className="w-full p-3 rounded-xl border border-[#CBD5E1] text-xs font-medium outline-none focus:ring-2 focus:ring-[#0FA38F]"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedApp(null)}
-                  className="px-4 py-2.5 rounded-xl border border-[#CBD5E1] text-xs font-bold text-[#53607A] hover:bg-[#F4F7FB]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingReview}
-                  style={{ backgroundColor: accentColor || '#0FA38F' }}
-                  className="px-5 py-2.5 rounded-xl text-white text-xs font-extrabold shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-                >
-                  {submittingReview ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <span>Confirm Decision</span>
-                  )}
-                </button>
-              </div>
+              {/* Confirmation Dialog Box */}
+              {showConfirmDialog ? (
+                <div className="p-4 rounded-2xl bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle size={18} className="shrink-0 text-[#D97706] mt-0.5" />
+                    <div>
+                      <p className="text-xs font-black">
+                        {reviewAction === 'APPROVE'
+                          ? `Approve ${selectedApp.businessName}?`
+                          : reviewAction === 'REQUEST_CHANGES'
+                          ? `Request changes for ${selectedApp.businessName}?`
+                          : `Reject ${selectedApp.businessName}?`}
+                      </p>
+                      <p className="text-[11px] font-medium text-[#B45309] mt-0.5">
+                        {reviewAction === 'APPROVE'
+                          ? 'The store will become ACTIVE and the owner will be granted store administrator access.'
+                          : reviewAction === 'REQUEST_CHANGES'
+                          ? 'The applicant will see your note on the Track Status page and can update details.'
+                          : 'The applicant will be notified of rejection.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={submittingReview}
+                      onClick={() => setShowConfirmDialog(false)}
+                      className="px-3.5 py-1.5 rounded-lg border border-[#CBD5E1] bg-white text-xs font-bold text-[#53607A]"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      disabled={submittingReview}
+                      onClick={handleExecuteDecision}
+                      className="px-4 py-1.5 rounded-lg bg-[#0FA38F] text-white text-xs font-extrabold flex items-center gap-1.5 shadow-sm"
+                    >
+                      {submittingReview ? (
+                        <>
+                          <RefreshCw size={13} className="animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <span>Yes, Confirm</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedApp(null);
+                      setErrorInsideDrawer('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl border border-[#CBD5E1] text-xs font-bold text-[#53607A] hover:bg-[#F4F7FB]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingReview}
+                    style={{ backgroundColor: accentColor || '#0FA38F' }}
+                    className="px-5 py-2.5 rounded-xl text-white text-xs font-extrabold shadow-sm transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Proceed to Confirm</span>
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>

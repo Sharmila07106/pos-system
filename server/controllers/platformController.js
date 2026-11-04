@@ -7,6 +7,7 @@ const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const Complaint = require('../models/Complaint');
 const PlatformSettings = require('../models/PlatformSettings');
+const Settings = require('../models/Settings');
 const { memoryApplications } = require('./onboardingController');
 
 // Clean empty fallback arrays (No hardcoded demo stores)
@@ -53,17 +54,25 @@ const getApplications = asyncHandler(async (req, res) => {
 // @route   GET /api/platform/applications/:id
 // @access  Platform Admin Only
 const getApplicationById = asyncHandler(async (req, res) => {
+  const targetId = req.params.id;
+  let app = null;
+
   if (mongoose.connection.readyState === 1) {
     try {
-      const app = await StoreApplication.findById(req.params.id);
+      if (mongoose.Types.ObjectId.isValid(targetId)) {
+        app = await StoreApplication.findById(targetId);
+      }
+      if (!app) {
+        app = await StoreApplication.findOne({ applicationId: targetId.toUpperCase() });
+      }
       if (app) return res.json({ success: true, data: app });
     } catch (err) {
       console.warn('MongoDB getApplicationById error:', err.message);
     }
   }
 
-  const app = memoryApplications.find(
-    (a) => a._id === req.params.id || a.applicationId === req.params.id
+  app = memoryApplications.find(
+    (a) => a._id === targetId || a.applicationId === targetId
   );
 
   if (!app) {
@@ -79,10 +88,13 @@ const getApplicationById = asyncHandler(async (req, res) => {
 // @access  Platform Admin Only
 const reviewApplication = asyncHandler(async (req, res) => {
   const { action, reviewNotes } = req.body;
+  const targetId = req.params.id;
 
   if (!['APPROVE', 'REJECT', 'REQUEST_CHANGES'].includes(action)) {
-    res.status(400);
-    throw new Error('Invalid action. Must be APPROVE, REJECT, or REQUEST_CHANGES.');
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid review action. Must be APPROVE, REJECT, or REQUEST_CHANGES.',
+    });
   }
 
   const reviewerName = req.user?.name || 'Platform Administrator';
@@ -90,7 +102,12 @@ const reviewApplication = asyncHandler(async (req, res) => {
 
   if (mongoose.connection.readyState === 1) {
     try {
-      app = await StoreApplication.findById(req.params.id);
+      if (mongoose.Types.ObjectId.isValid(targetId)) {
+        app = await StoreApplication.findById(targetId);
+      }
+      if (!app) {
+        app = await StoreApplication.findOne({ applicationId: targetId.toUpperCase() });
+      }
     } catch (err) {
       console.warn('MongoDB reviewApplication lookup error:', err.message);
     }
@@ -98,23 +115,55 @@ const reviewApplication = asyncHandler(async (req, res) => {
 
   if (!app) {
     app = memoryApplications.find(
-      (a) => a._id === req.params.id || a.applicationId === req.params.id
+      (a) => a._id === targetId || a.applicationId === targetId
     );
   }
 
   if (!app) {
-    res.status(404);
-    throw new Error('Application record not found');
+    return res.status(404).json({
+      success: false,
+      message: 'Application record not found.',
+    });
   }
 
+  // 1. APPROVE ACTION
   if (action === 'APPROVE') {
+    // Idempotency check: if already approved and store exists, return existing
+    if (app.status === 'APPROVED' && app.createdStore) {
+      const existingStore = await Store.findById(app.createdStore).catch(() => null);
+      return res.json({
+        success: true,
+        message: `Supermarket "${app.businessName}" is already approved and operational.`,
+        data: { application: app, store: existingStore },
+      });
+    }
+
+    if (!['PENDING', 'CHANGES_REQUESTED', 'UNDER_REVIEW'].includes(app.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot approve application with status "${app.status}". Only pending applications can be approved.`,
+      });
+    }
+
     const slug = app.businessName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const storeCode = generateStoreCode();
+
+    // Generate unique store code
+    let storeCode = '';
+    for (let i = 0; i < 10; i++) {
+      const candidate = `STR-${Math.floor(1000 + Math.random() * 9000)}`;
+      const exists = await Store.findOne({ storeCode: candidate });
+      if (!exists) {
+        storeCode = candidate;
+        break;
+      }
+    }
+    if (!storeCode) storeCode = `STR-${Date.now().toString().slice(-4)}`;
 
     if (mongoose.connection.readyState === 1) {
       let owner = await User.findOne({ email: app.email });
       let activationToken = null;
       let activationLink = null;
+
       if (!owner) {
         const chosenPassword = app.password || app.registrationPassword || app.ownerPassword;
         if (chosenPassword) {
@@ -128,7 +177,7 @@ const reviewApplication = asyncHandler(async (req, res) => {
             isActive: true,
           });
         } else {
-          // If no password exists, generate a random one-time activation link instead of a fixed password
+          // If no pre-chosen password exists, generate single-use activation token
           activationToken = crypto.randomBytes(32).toString('hex');
           const tempRandomPassword = crypto.randomBytes(24).toString('hex') + 'A1!';
           owner = await User.create({
@@ -175,8 +224,22 @@ const reviewApplication = asyncHandler(async (req, res) => {
       owner.store = store._id;
       await owner.save();
 
+      // Initialize Store Settings if not existing
+      const existingSettings = await Settings.findOne({ store: store._id });
+      if (!existingSettings) {
+        await Settings.create({
+          store: store._id,
+          storeName: store.name,
+          address: store.address || '',
+          phone: store.phone || '',
+          taxRatePercent: 5,
+          currency: 'INR',
+          receiptFooter: `Thank you for shopping at ${store.name}!`,
+        }).catch((err) => console.warn('Store settings init warning:', err.message));
+      }
+
       app.status = 'APPROVED';
-      app.reviewNotes = reviewNotes || 'Application verified and store activated.';
+      app.reviewNotes = (reviewNotes && reviewNotes.trim()) ? reviewNotes.trim() : 'Application verified and store activated.';
       app.reviewedBy = req.user?._id;
       app.reviewedAt = new Date();
       app.createdStore = store._id;
@@ -196,35 +259,91 @@ const reviewApplication = asyncHandler(async (req, res) => {
       return res.json({
         success: true,
         message: `Supermarket "${app.businessName}" has been successfully approved and activated!`,
-        data: { application: app, store },
+        data: {
+          application: app,
+          store,
+          owner: {
+            _id: owner._id,
+            name: owner.name,
+            email: owner.email,
+            status: owner.status,
+          },
+          activationLink,
+          ownerCreated: !!owner,
+        },
       });
     }
   }
 
-  const newStatus = action === 'REJECT' ? 'REJECTED' : 'CHANGES_REQUESTED';
-  app.status = newStatus;
-  app.reviewNotes = reviewNotes || `Application status changed to ${newStatus}.`;
-  app.reviewedAt = new Date().toISOString();
+  // 2. REQUEST CHANGES ACTION
+  if (action === 'REQUEST_CHANGES') {
+    if (!reviewNotes || reviewNotes.trim().length < 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'A review note with at least 5 characters is required when requesting changes.',
+      });
+    }
 
-  if (mongoose.connection.readyState === 1 && typeof app.save === 'function') {
-    await app.save();
+    app.status = 'CHANGES_REQUESTED';
+    app.reviewNotes = reviewNotes.trim();
+    app.reviewedAt = new Date();
+    app.reviewedBy = req.user?._id;
+
+    if (mongoose.connection.readyState === 1 && typeof app.save === 'function') {
+      await app.save();
+    }
+
+    await AuditLog.create({
+      actor: req.user?._id,
+      actorName: reviewerName,
+      actorRole: 'PLATFORM_ADMIN',
+      action: 'CHANGES_REQUESTED',
+      entity: 'StoreApplication',
+      entityId: app.applicationId,
+      details: { reason: reviewNotes.trim() },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Application ${app.applicationId} marked as Changes Requested. Feedback sent to applicant.`,
+      data: app,
+    });
   }
 
-  await AuditLog.create({
-    actor: req.user?._id,
-    actorName: reviewerName,
-    actorRole: 'PLATFORM_ADMIN',
-    action: action === 'REJECT' ? 'STORE_REJECTED' : 'CHANGES_REQUESTED',
-    entity: 'StoreApplication',
-    entityId: app.applicationId,
-    details: { reason: reviewNotes },
-  }).catch(() => {});
+  // 3. REJECT ACTION
+  if (action === 'REJECT') {
+    if (!reviewNotes || reviewNotes.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        message: 'A rejection reason is required when rejecting an application.',
+      });
+    }
 
-  return res.json({
-    success: true,
-    message: `Application status updated to ${newStatus}.`,
-    data: app,
-  });
+    app.status = 'REJECTED';
+    app.reviewNotes = reviewNotes.trim();
+    app.reviewedAt = new Date();
+    app.reviewedBy = req.user?._id;
+
+    if (mongoose.connection.readyState === 1 && typeof app.save === 'function') {
+      await app.save();
+    }
+
+    await AuditLog.create({
+      actor: req.user?._id,
+      actorName: reviewerName,
+      actorRole: 'PLATFORM_ADMIN',
+      action: 'STORE_REJECTED',
+      entity: 'StoreApplication',
+      entityId: app.applicationId,
+      details: { reason: reviewNotes.trim() },
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: `Application ${app.applicationId} has been rejected.`,
+      data: app,
+    });
+  }
 });
 
 // @desc    Get all registered stores with owner details

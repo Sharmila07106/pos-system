@@ -7,16 +7,10 @@ const Settings = require('../models/Settings');
 const Batch = require('../models/Batch');
 const Store = require('../models/Store');
 const User = require('../models/User');
+const { getNextTransactionId } = require('../utils/counter');
 
 const memorySales = [];
 
-// Helper to generate sequential transaction ID per store
-const generateTxnId = async (storeId) => {
-  const count = await Sale.countDocuments({ store: storeId });
-  return `TXN-${String(count + 1).padStart(5, '0')}`;
-};
-
-// @desc    Create a new sale (checkout)
 // @desc    Create a new sale (checkout)
 // @route   POST /api/sales
 // @access  Private (Store Staff Only - Platform Admin Forbidden)
@@ -133,7 +127,7 @@ const createSale = asyncHandler(async (req, res) => {
     throw new Error(failureReason || 'Failed to complete checkout due to insufficient stock');
   }
 
-  const txnId = await generateTxnId(storeId);
+  let txnId = await getNextTransactionId(storeId);
   let subtotal = 0;
   const processedItems = [];
   const stockMovements = [];
@@ -222,26 +216,71 @@ const createSale = asyncHandler(async (req, res) => {
       }
     : undefined;
 
-  // Save Sale record
-  const sale = await Sale.create({
-    store: storeId,
-    transactionId: txnId,
-    receiptNo: txnId,
-    idempotencyKey: clientKey || undefined,
-    items: processedItems,
-    subtotal: Number(subtotal.toFixed(2)),
-    tax,
-    taxRate,
-    discount: discountAmount,
-    total: finalTotal,
-    paymentMethod,
-    amountReceived: received,
-    changeGiven: change,
-    status: 'COMPLETED',
-    cashierUser: req.user._id,
-    cashierName: req.user.name || 'Cashier',
-    storeSnapshot,
-  });
+  // Save Sale record with atomic retry on duplicate key (code 11000)
+  let sale = null;
+  const maxRetries = 3;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      sale = await Sale.create({
+        store: storeId,
+        transactionId: txnId,
+        receiptNo: txnId,
+        idempotencyKey: clientKey || undefined,
+        items: processedItems,
+        subtotal: Number(subtotal.toFixed(2)),
+        tax,
+        taxRate,
+        discount: discountAmount,
+        total: finalTotal,
+        paymentMethod,
+        amountReceived: received,
+        changeGiven: change,
+        status: 'COMPLETED',
+        cashierUser: req.user._id,
+        cashierName: req.user.name || 'Cashier',
+        storeSnapshot,
+      });
+      break;
+    } catch (createErr) {
+      // If idempotency collision (another concurrent request with identical key finished first)
+      if (clientKey && (createErr.code === 11000 || createErr.message?.includes('idempotencyKey'))) {
+        const existing = await Sale.findOne({ store: storeId, idempotencyKey: clientKey });
+        if (existing) {
+          // Rollback local stock decrement since the concurrent request already deducted stock
+          for (const dec of decrementedItems) {
+            await Product.updateOne(
+              { _id: dec.product._id, store: storeId },
+              { $inc: { stock: dec.qty } }
+            ).catch(() => {});
+          }
+          return res.status(200).json({
+            success: true,
+            message: 'Sale already processed',
+            data: existing,
+            isDuplicate: true,
+          });
+        }
+      }
+
+      // If duplicate key error on transactionId, fetch next sequence and retry
+      if (createErr.code === 11000 && attempt < maxRetries) {
+        console.warn(`Duplicate key on transactionId (${txnId}), retrying with next counter sequence (attempt ${attempt + 1}/${maxRetries})...`);
+        txnId = await getNextTransactionId(storeId);
+        stockMovements.forEach((sm) => { sm.reference = txnId; });
+        continue;
+      }
+
+      // Rollback stock decrement on unrecoverable failure
+      for (const dec of decrementedItems) {
+        await Product.updateOne(
+          { _id: dec.product._id, store: storeId },
+          { $inc: { stock: dec.qty } }
+        ).catch(() => {});
+      }
+      throw createErr;
+    }
+  }
 
   // Record stock movements in parallel
   if (stockMovements.length > 0) {

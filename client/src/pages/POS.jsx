@@ -71,6 +71,7 @@ const POS = () => {
   const [amountReceived, setAmountReceived] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [cardAuthCode, setCardAuthCode] = useState('');
+  const [tenderIdempotencyKey, setTenderIdempotencyKey] = useState('');
 
   // Receipt Modal State
   const [receiptData, setReceiptData] = useState(null);
@@ -453,6 +454,7 @@ const POS = () => {
       return;
     }
     setAmountReceived(String(Math.ceil(grandTotal)));
+    setTenderIdempotencyKey("pos-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9));
     setShowTenderModal(true);
   };
 
@@ -474,7 +476,7 @@ const POS = () => {
     }
 
     setIsProcessing(true);
-    const idempotencyKey = `pos-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const idempotencyKey = tenderIdempotencyKey || ("pos-" + Date.now() + "-" + Math.random().toString(36).substring(2, 9));
 
     const payload = {
       idempotencyKey,
@@ -559,7 +561,7 @@ const POS = () => {
       }
     } catch (error) {
       console.error('Checkout error:', error);
-      toast.error(error.response?.data?.message || 'Checkout failed');
+      // Single toast handled by api.js deduplicating interceptor
     } finally {
       setIsProcessing(false);
     }

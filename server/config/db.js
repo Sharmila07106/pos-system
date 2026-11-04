@@ -133,6 +133,14 @@ async function attemptConnection() {
       // Non-fatal notice
     }
 
+    // Auto-migrate indexes and initialize atomic counters
+    try {
+      const { migrateIndexes } = require('../utils/migrateIndexes');
+      await migrateIndexes();
+    } catch (migErr) {
+      console.error('⚠️ Index migration error on startup:', migErr.message);
+    }
+
     // Run demo data cleanup once at startup if CLEANUP_DEMO_DATA=true is set (e.g. on Render)
     if (process.env.CLEANUP_DEMO_DATA === 'true') {
       try {

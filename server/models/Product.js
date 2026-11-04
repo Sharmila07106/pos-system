@@ -100,4 +100,13 @@ productSchema.pre('save', function () {
 // Compound index so barcode is unique PER supermarket store
 productSchema.index({ store: 1, barcode: 1 }, { unique: true });
 
+// Compound index so SKU is unique PER supermarket store (when provided)
+productSchema.index(
+  { store: 1, sku: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { sku: { $type: 'string', $gt: '' } },
+  }
+);
+
 module.exports = mongoose.model('Product', productSchema);
